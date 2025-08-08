@@ -1,0 +1,17 @@
+{
+  "name": "evaluator-e2e",
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "implicitDependencies": ["evaluator"],
+  "projectType": "application",
+  "targets": {
+    "e2e": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{e2eProjectRoot}"],
+      "options": {
+        "jestConfig": "evaluator-e2e/jest.config.ts",
+        "passWithNoTests": true
+      },
+      "dependsOn": ["evaluator:build", "evaluator:serve"]
+    }
+  }
+}
