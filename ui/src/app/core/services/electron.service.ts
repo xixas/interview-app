@@ -152,7 +152,7 @@ export class ElectronService {
     return this.api.system.showNotification(title, body, options);
   }
 
-  async exportData(data: any, filename: string = 'interview-results.json'): Promise<FileResult> {
+  async exportData(data: any, filename = 'interview-results.json'): Promise<FileResult> {
     if (!this.api) {
       // Fallback for web - trigger download
       this.downloadAsFile(data, filename);

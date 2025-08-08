@@ -11,7 +11,15 @@
     "nxe:test:frontend": "nx test ui",
     "nxe:test:backend": "nx test electron",
     "nxe:package:app": "nx run electron:make --prepackageOnly",
-    "nxe:make:app": "nx run electron:make"
+    "nxe:make:app": "nx run electron:make",
+    "serve:api": "nx serve api",
+    "serve:evaluator": "nx serve evaluator",
+    "build:api": "nx build api",
+    "build:evaluator": "nx build evaluator",
+    "build": "nx run-many -t build --projects=ui,api,evaluator,electron",
+    "test": "nx run-many -t test --all",
+    "lint": "nx run-many -t lint --all",
+    "dev": "concurrently \"npm run serve:api\" \"npm run serve:evaluator\" \"npm run nxe:serve:frontend\""
   },
   "private": true,
   "devDependencies": {
@@ -45,6 +53,7 @@
     "@types/node": "18.16.9",
     "@typescript-eslint/utils": "^8.29.0",
     "angular-eslint": "^20.0.0",
+    "concurrently": "^9.2.0",
     "electron": "^34.5.6",
     "eslint": "^9.8.0",
     "eslint-config-prettier": "^10.0.0",

@@ -46,7 +46,7 @@ export class DebugService {
     console.groupEnd();
   }
 
-  logApiCall(endpoint: string, method: string = 'GET') {
+  logApiCall(endpoint: string, method = 'GET') {
     if (!this.env.production) {
       console.log(`🌐 API Call: ${method} ${endpoint}`);
     }
