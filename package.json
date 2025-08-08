@@ -19,7 +19,8 @@
     "build": "nx run-many -t build --projects=ui,api,evaluator,electron",
     "test": "nx run-many -t test --all",
     "lint": "nx run-many -t lint --all",
-    "dev": "concurrently \"npm run serve:api\" \"npm run serve:evaluator\" \"npm run nxe:serve:frontend\""
+    "dev": "concurrently \"npm run serve:api\" \"npm run serve:evaluator\" \"npm run nxe:serve:frontend\"",
+    "dev:electron": "concurrently \"npm run serve:api\" \"npm run serve:evaluator\" \"npm run nxe:serve:frontend\" \"npm run nxe:serve:backend\""
   },
   "private": true,
   "devDependencies": {

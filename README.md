@@ -49,7 +49,7 @@ cd interview-app-v2
 # Install dependencies
 npm install
 
-# Start development servers
+# Start development servers (web only)
 npm run dev
 ```
 
@@ -58,14 +58,15 @@ This will start:
 - API server at `http://localhost:3000`
 - Evaluator service at `http://localhost:3001`
 
-### Desktop App
+### Desktop App Development
 
 ```bash
-# Build all projects
-npm run build
+# Start all services + Electron desktop app
+npm run dev:electron
 
-# Start Electron app
-npm run electron:dev
+# Or build all projects and start Electron separately
+npm run build
+npm run nxe:serve:backend
 ```
 
 ## 📚 Documentation
@@ -78,10 +79,12 @@ npm run electron:dev
 ## 🧪 Available Scripts
 
 ### Development
-- `npm run nxe:serve:frontend` - Start Angular dev server
-- `npm run nxe:serve:backend` - Start Electron app
-- `npm run serve:api` - Start API server
-- `npm run serve:evaluator` - Start evaluator service
+- `npm run dev` - Start all backend services + Angular dev server (web only)
+- `npm run dev:electron` - Start all services + Electron desktop app
+- `npm run nxe:serve:frontend` - Start Angular dev server only
+- `npm run nxe:serve:backend` - Start Electron app only
+- `npm run serve:api` - Start API server only
+- `npm run serve:evaluator` - Start evaluator service only
 
 ### Building
 - `npm run nxe:build:frontend` - Build Angular app
