@@ -1,12 +1,13 @@
 import { Component, OnInit, signal, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { Card } from 'primeng/card';
-import { Button } from 'primeng/button';
-import { Chart } from 'primeng/chart';
-import { ProgressBar } from 'primeng/progressbar';
-import { Tag } from 'primeng/tag';
-import { Table } from 'primeng/table';
+import { CardModule } from 'primeng/card';
+import { ButtonModule } from 'primeng/button';
+import { ChartModule } from 'primeng/chart';
+import { ProgressBarModule } from 'primeng/progressbar';
+import { TagModule } from 'primeng/tag';
+import { TableModule } from 'primeng/table';
 import { firstValueFrom } from 'rxjs';
 import { ProficiencyLevel, Role, QuestionDifficulty } from '@interview-app/shared-interfaces';
 import { EnvironmentService } from '../../core/services/environment.service';
@@ -32,12 +33,12 @@ interface ActivityItem {
   selector: 'app-dashboard',
   imports: [
     CommonModule,
-    Card,
-    Button,
-    Chart,
-    ProgressBar,
-    Tag,
-    Table
+    CardModule,
+    ButtonModule,
+    ChartModule,
+    ProgressBarModule,
+    TagModule,
+    TableModule
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
@@ -45,6 +46,7 @@ interface ActivityItem {
 })
 export class DashboardComponent implements OnInit {
   private http = inject(HttpClient);
+  private router = inject(Router);
   private env = inject(EnvironmentService);
 
   // Signals for reactive state management
@@ -194,13 +196,11 @@ export class DashboardComponent implements OnInit {
   }
 
   startNewInterview() {
-    // Navigate to interview page
-    console.log('Starting new interview...');
+    this.router.navigate(['/interview']);
   }
 
   startPractice() {
-    // Navigate to practice page
-    console.log('Starting practice session...');
+    this.router.navigate(['/interview']);
   }
 
   getStatusSeverity(status: string): 'success' | 'info' | 'warn' | 'danger' {

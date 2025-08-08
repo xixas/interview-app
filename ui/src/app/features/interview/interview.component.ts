@@ -3,17 +3,17 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Card } from 'primeng/card';
-import { Button } from 'primeng/button';
-import { Select } from 'primeng/select';
-import { Textarea } from 'primeng/textarea';
-import { ProgressBar } from 'primeng/progressbar';
-import { Checkbox } from 'primeng/checkbox';
-import { InputNumber } from 'primeng/inputnumber';
-import { Dialog } from 'primeng/dialog';
-import { Message } from 'primeng/message';
-import { Tag } from 'primeng/tag';
-import { Panel } from 'primeng/panel';
+import { CardModule } from 'primeng/card';
+import { ButtonModule } from 'primeng/button';
+import { SelectModule } from 'primeng/select';
+import { TextareaModule } from 'primeng/textarea';
+import { ProgressBarModule } from 'primeng/progressbar';
+import { CheckboxModule } from 'primeng/checkbox';
+import { InputNumberModule } from 'primeng/inputnumber';
+import { DialogModule } from 'primeng/dialog';
+import { MessageModule } from 'primeng/message';
+import { TagModule } from 'primeng/tag';
+import { PanelModule } from 'primeng/panel';
 import { firstValueFrom } from 'rxjs';
 import { ProficiencyLevel, Role, QuestionDifficulty } from '@interview-app/shared-interfaces';
 import { EnvironmentService } from '../../core/services/environment.service';
@@ -105,17 +105,17 @@ interface InterviewResult {
   imports: [
     CommonModule,
     FormsModule,
-    Card,
-    Button,
-    Select,
-    Textarea,
-    ProgressBar,
-    Checkbox,
-    InputNumber,
-    Dialog,
-    Message,
-    Tag,
-    Panel
+    CardModule,
+    ButtonModule,
+    SelectModule,
+    TextareaModule,
+    ProgressBarModule,
+    CheckboxModule,
+    InputNumberModule,
+    DialogModule,
+    MessageModule,
+    TagModule,
+    PanelModule
   ],
   templateUrl: './interview.component.html',
   styleUrl: './interview.component.scss',
@@ -125,6 +125,9 @@ export class InterviewComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private router = inject(Router);
   protected env = inject(EnvironmentService);
+  
+  // Make Math available in template
+  protected readonly Math = Math;
 
   // Signals for reactive state management
   currentStep = signal<'setup' | 'interview' | 'results'>('setup');
@@ -629,10 +632,10 @@ export class InterviewComponent implements OnInit, OnDestroy {
     return recommendations;
   }
 
-  private getAverageMetric(responses: InterviewResponse[], metric: keyof InterviewResponse['aiAnalysis']['metrics']): number {
+  private getAverageMetric(responses: InterviewResponse[], metric: string): number {
     const scores = responses
-      .filter(r => r.aiAnalysis?.metrics?.[metric] !== undefined)
-      .map(r => r.aiAnalysis!.metrics[metric]);
+      .filter(r => r.aiAnalysis?.metrics && (r.aiAnalysis.metrics as any)[metric] !== undefined)
+      .map(r => (r.aiAnalysis!.metrics as any)[metric]);
     
     return scores.length > 0 ? scores.reduce((sum, score) => sum + score, 0) / scores.length : 0;
   }

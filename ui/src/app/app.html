@@ -22,8 +22,8 @@
     </div>
   </p-toolbar>
 
-  <!-- Sidebar Navigation -->
-  <p-sidebar 
+  <!-- Drawer Navigation -->
+  <p-drawer 
     [(visible)]="sidebarVisible" 
     [modal]="false"
     [showCloseIcon]="false"
@@ -40,7 +40,7 @@
       styleClass="sidebar-menu"
       (onBlur)="sidebarVisible = false">
     </p-menu>
-  </p-sidebar>
+  </p-drawer>
 
   <!-- Main Content Area -->
   <div class="app-content">

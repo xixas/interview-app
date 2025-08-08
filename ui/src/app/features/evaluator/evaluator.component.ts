@@ -3,16 +3,15 @@ import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { Card } from 'primeng/card';
-import { Button } from 'primeng/button';
-import { InputText } from 'primeng/inputtext';
-import { Textarea } from 'primeng/textarea';
-import { Select } from 'primeng/select';
-import { ProgressBar } from 'primeng/progressbar';
-import { Tag } from 'primeng/tag';
-import { Message } from 'primeng/message';
-import { Toolbar } from 'primeng/toolbar';
-import { Divider } from 'primeng/divider';
+import { CardModule } from 'primeng/card';
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { TextareaModule } from 'primeng/textarea';
+import { SelectModule } from 'primeng/select';
+import { ProgressBarModule } from 'primeng/progressbar';
+import { TagModule } from 'primeng/tag';
+import { MessageModule } from 'primeng/message';
+import { DividerModule } from 'primeng/divider';
 import { firstValueFrom } from 'rxjs';
 import { EnvironmentService } from '../../core/services/environment.service';
 import { DebugService } from '../../core/services/debug.service';
@@ -67,16 +66,15 @@ interface SampleQuestion {
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    Card,
-    Button,
-    InputText,
-    Textarea,
-    Select,
-    ProgressBar,
-    Tag,
-    Message,
-    Toolbar,
-    Divider
+    CardModule,
+    ButtonModule,
+    InputTextModule,
+    TextareaModule,
+    SelectModule,
+    ProgressBarModule,
+    TagModule,
+    MessageModule,
+    DividerModule
   ],
   templateUrl: './evaluator.component.html',
   styleUrl: './evaluator.component.scss',

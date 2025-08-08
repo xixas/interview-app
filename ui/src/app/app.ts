@@ -1,10 +1,11 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { Button } from 'primeng/button';
-import { Toolbar } from 'primeng/toolbar';
-import { Sidebar } from 'primeng/sidebar';
-import { Menu } from 'primeng/menu';
+import { ButtonModule } from 'primeng/button';
+import { ToolbarModule } from 'primeng/toolbar';
+import { DrawerModule } from 'primeng/drawer';
+import { MenuModule } from 'primeng/menu';
+import { TooltipModule } from 'primeng/tooltip';
 import { LayoutService } from './core/services/layout.service';
 import { EnvironmentService } from './core/services/environment.service';
 import { DebugService } from './core/services/debug.service';
@@ -13,10 +14,11 @@ import { DebugService } from './core/services/debug.service';
   imports: [
     CommonModule,
     RouterModule,
-    Button,
-    Toolbar,
-    Sidebar,
-    Menu
+    ButtonModule,
+    ToolbarModule,
+    DrawerModule,
+    MenuModule,
+    TooltipModule
   ],
   selector: 'app-root',
   templateUrl: './app.html',
@@ -36,24 +38,14 @@ export class App implements OnInit {
       routerLink: '/dashboard'
     },
     {
-      label: 'Interview',
+      label: 'Practice Interview',
       icon: 'pi pi-microphone',
       routerLink: '/interview'
     },
     {
-      label: 'Practice',
-      icon: 'pi pi-book',
-      routerLink: '/practice'
-    },
-    {
-      label: 'Evaluator',
+      label: 'AI Evaluator',
       icon: 'pi pi-chart-line',
       routerLink: '/evaluator'
-    },
-    {
-      label: 'Settings',
-      icon: 'pi pi-cog',
-      routerLink: '/settings'
     }
   ];
   
