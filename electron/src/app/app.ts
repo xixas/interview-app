@@ -1,8 +1,9 @@
-import { BrowserWindow, shell, screen } from 'electron';
+import { BrowserWindow, shell, screen, Menu } from 'electron';
 import { rendererAppName, rendererAppPort } from './constants';
 import { environment } from '../environments/environment';
 import { join } from 'path';
 import { format } from 'url';
+import { IPCHandlers } from './api/ipc-handlers';
 
 export default class App {
   // Keep a global reference of the window object, if you don't, the window will
@@ -10,6 +11,7 @@ export default class App {
   static mainWindow: Electron.BrowserWindow;
   static application: Electron.App;
   static BrowserWindow;
+  static ipcHandlers: IPCHandlers;
 
   public static isDevelopmentMode() {
     const isEnvironmentSet: boolean = 'ELECTRON_IS_DEV' in process.env;
@@ -47,6 +49,10 @@ export default class App {
     if (rendererAppName) {
       App.initMainWindow();
       App.loadMainWindow();
+      App.setupApplicationMenu();
+      
+      // Initialize IPC handlers
+      App.ipcHandlers = new IPCHandlers();
     }
   }
 
@@ -54,7 +60,10 @@ export default class App {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
     if (App.mainWindow === null) {
-      App.onReady();
+      App.initMainWindow();
+      App.loadMainWindow();
+      App.setupApplicationMenu();
+      // Don't reinitialize IPC handlers - they should only be created once
     }
   }
 
@@ -74,7 +83,7 @@ export default class App {
         preload: join(__dirname, 'main.preload.js'),
       },
     });
-    App.mainWindow.setMenu(null);
+    // Don't set menu to null, we'll create a custom one
     App.mainWindow.center();
 
     // if main window is ready to show, close the splash window and show the main window
@@ -110,6 +119,158 @@ export default class App {
         })
       );
     }
+  }
+
+  private static setupApplicationMenu() {
+    const template: any[] = [
+      {
+        label: 'File',
+        submenu: [
+          {
+            label: 'Export Results...',
+            accelerator: 'CmdOrCtrl+E',
+            click: () => {
+              App.mainWindow.webContents.send('menu-export-results');
+            }
+          },
+          {
+            label: 'Import Questions...',
+            accelerator: 'CmdOrCtrl+I',
+            click: () => {
+              App.mainWindow.webContents.send('menu-import-questions');
+            }
+          },
+          { type: 'separator' },
+          {
+            label: 'Settings',
+            accelerator: 'CmdOrCtrl+,',
+            click: () => {
+              App.mainWindow.webContents.send('menu-settings');
+            }
+          },
+          { type: 'separator' },
+          {
+            role: 'quit'
+          }
+        ]
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { role: 'undo' },
+          { role: 'redo' },
+          { type: 'separator' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'selectall' }
+        ]
+      },
+      {
+        label: 'View',
+        submenu: [
+          { role: 'reload' },
+          { role: 'forceReload' },
+          { role: 'toggleDevTools' },
+          { type: 'separator' },
+          { role: 'resetZoom' },
+          { role: 'zoomIn' },
+          { role: 'zoomOut' },
+          { type: 'separator' },
+          { role: 'togglefullscreen' }
+        ]
+      },
+      {
+        label: 'Interview',
+        submenu: [
+          {
+            label: 'Start New Interview',
+            accelerator: 'CmdOrCtrl+N',
+            click: () => {
+              App.mainWindow.webContents.send('menu-new-interview');
+            }
+          },
+          {
+            label: 'Go to Dashboard',
+            accelerator: 'CmdOrCtrl+D',
+            click: () => {
+              App.mainWindow.webContents.send('menu-dashboard');
+            }
+          },
+          {
+            label: 'AI Evaluator',
+            accelerator: 'CmdOrCtrl+A',
+            click: () => {
+              App.mainWindow.webContents.send('menu-evaluator');
+            }
+          }
+        ]
+      },
+      {
+        label: 'Window',
+        submenu: [
+          { role: 'minimize' },
+          { role: 'close' },
+          {
+            label: 'Always on Top',
+            type: 'checkbox',
+            click: (menuItem) => {
+              App.mainWindow.setAlwaysOnTop(menuItem.checked);
+            }
+          }
+        ]
+      },
+      {
+        role: 'help',
+        submenu: [
+          {
+            label: 'About Interview App',
+            click: () => {
+              App.mainWindow.webContents.send('menu-about');
+            }
+          },
+          {
+            label: 'Learn More',
+            click: async () => {
+              await shell.openExternal('https://github.com/your-repo/interview-app');
+            }
+          }
+        ]
+      }
+    ];
+
+    // macOS specific menu adjustments
+    if (process.platform === 'darwin') {
+      template.unshift({
+        label: App.application.getName(),
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { 
+            label: 'Services',
+            submenu: []
+          },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideothers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' }
+        ]
+      });
+
+      // Window menu
+      template[5].submenu = [
+        { role: 'close' },
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'front' }
+      ];
+    }
+
+    const menu = Menu.buildFromTemplate(template as any);
+    Menu.setApplicationMenu(menu);
   }
 
   static main(app: Electron.App, browserWindow: typeof BrowserWindow) {

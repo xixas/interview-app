@@ -38,7 +38,7 @@
       "options": {
         "name": "electron",
         "frontendProject": "ui",
-        "sourcePath": "dist/apps",
+        "sourcePath": "dist",
         "outputPath": "dist/packages",
         "prepackageOnly": true
       }
@@ -48,7 +48,7 @@
       "options": {
         "name": "electron",
         "frontendProject": "ui",
-        "sourcePath": "dist/apps",
+        "sourcePath": "dist",
         "outputPath": "dist/executables"
       }
     },

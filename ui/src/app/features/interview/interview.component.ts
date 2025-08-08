@@ -17,6 +17,7 @@ import { PanelModule } from 'primeng/panel';
 import { firstValueFrom } from 'rxjs';
 import { ProficiencyLevel, Role, QuestionDifficulty } from '@interview-app/shared-interfaces';
 import { EnvironmentService } from '../../core/services/environment.service';
+import { ElectronService } from '../../core/services/electron.service';
 
 interface InterviewSettings {
   category: string;
@@ -125,6 +126,7 @@ export class InterviewComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private router = inject(Router);
   protected env = inject(EnvironmentService);
+  private electron = inject(ElectronService);
   
   // Make Math available in template
   protected readonly Math = Math;

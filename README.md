@@ -1,77 +1,145 @@
-# InterviewAppV2
+# Interview App v2 - Desktop Edition
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+A comprehensive mock interview desktop application built with modern web technologies and Electron. This application provides AI-powered interview practice, evaluation, and analytics for technical interviews.
 
-✨ Your new, shiny [Nx workspace](https://nx.dev) is almost ready ✨.
+## 🚀 Features
 
-[Learn more about this workspace setup and its capabilities](https://nx.dev/getting-started/intro#learn-nx?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
+- **Mock Interview Sessions**: Practice with real-world technical questions
+- **AI-Powered Evaluation**: Get detailed feedback using OpenAI integration
+- **Audio Recording**: Record your responses for better practice
+- **Desktop Integration**: Native file operations, notifications, and system integration
+- **Technology Focus**: Multiple programming languages and frameworks
+- **Progress Tracking**: Comprehensive analytics and performance metrics
+- **Dark/Light Theme**: Modern UI with PrimeNG components
 
-## Finish your CI setup
+## 🏗️ Architecture
 
-[Click here to finish setting up your workspace!](https://cloud.nx.app/connect/OCqYh5JAjM)
+This is an **Nx monorepo** containing multiple applications:
 
+- **UI** (`/ui`): Angular 20+ frontend with PrimeNG components
+- **API** (`/api`): NestJS backend for question management
+- **Evaluator** (`/evaluator`): NestJS service with OpenAI integration
+- **Electron** (`/electron`): Desktop wrapper with native integrations
+- **Shared Libraries** (`/libs`): Common interfaces and utilities
 
-## Run tasks
+## 🛠️ Tech Stack
 
-To run tasks with Nx use:
+- **Frontend**: Angular 20, PrimeNG, TypeScript, SCSS
+- **Backend**: NestJS, TypeScript, SQLite
+- **Desktop**: Electron, IPC Communication
+- **AI**: OpenAI API for evaluation
+- **Build**: Nx, Webpack, electron-builder
+- **Testing**: Jest, ESLint
 
-```sh
-npx nx <target> <project-name>
+## 🏃‍♂️ Quick Start
+
+### Prerequisites
+
+- Node.js 18+ 
+- npm or yarn
+- Git
+
+### Installation
+
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd interview-app-v2
+
+# Install dependencies
+npm install
+
+# Start development servers
+npm run dev
 ```
 
-For example:
+This will start:
+- Angular UI dev server at `http://localhost:4200`
+- API server at `http://localhost:3000`
+- Evaluator service at `http://localhost:3001`
 
-```sh
-npx nx build myproject
+### Desktop App
+
+```bash
+# Build all projects
+npm run build
+
+# Start Electron app
+npm run electron:dev
 ```
 
-These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
+## 📚 Documentation
 
-[More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+- [Development Setup](./docs/development.md) - Detailed setup instructions
+- [Deployment Guide](./docs/deployment.md) - Building and packaging for production
+- [Architecture Overview](./docs/architecture.md) - System design and components
+- [API Documentation](./docs/api.md) - Backend API reference
 
-## Add new projects
+## 🧪 Available Scripts
 
-While you could add new projects to your workspace manually, you might want to leverage [Nx plugins](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) and their [code generation](https://nx.dev/features/generate-code?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) feature.
+### Development
+- `npm run nxe:serve:frontend` - Start Angular dev server
+- `npm run nxe:serve:backend` - Start Electron app
+- `npm run serve:api` - Start API server
+- `npm run serve:evaluator` - Start evaluator service
 
-To install a new plugin you can use the `nx add` command. Here's an example of adding the React plugin:
-```sh
-npx nx add @nx/react
-```
+### Building
+- `npm run nxe:build:frontend` - Build Angular app
+- `npm run nxe:build:backend` - Build Electron app
+- `npm run build:api` - Build API server
+- `npm run build:evaluator` - Build evaluator service
 
-Use the plugin's generator to create new projects. For example, to create a new React app or library:
+### Testing
+- `npm run test` - Run all tests
+- `npm run lint` - Run linting
 
-```sh
-# Generate an app
-npx nx g @nx/react:app demo
+### Packaging
+- `npm run nxe:package:app` - Package desktop app
+- `npm run nxe:make:app` - Create distributable
 
-# Generate a library
-npx nx g @nx/react:lib some-lib
-```
+## 🌟 Key Features
 
-You can use `npx nx list` to get a list of installed plugins. Then, run `npx nx list <plugin-name>` to learn about more specific capabilities of a particular plugin. Alternatively, [install Nx Console](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) to browse plugins and generators in your IDE.
+### Mock Interviews
+- Technology-specific question sets
+- Difficulty levels (Easy, Medium, Hard, Mixed)
+- Audio recording and playback
+- Timed sessions with progress tracking
 
-[Learn more about Nx plugins &raquo;](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) | [Browse the plugin registry &raquo;](https://nx.dev/plugin-registry?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+### AI Evaluation
+- Technical accuracy assessment
+- Communication skills analysis
+- Detailed feedback and improvements
+- Scoring across multiple dimensions
 
+### Desktop Integration
+- Native file save/open dialogs
+- System notifications
+- Menu integration with keyboard shortcuts
+- Settings persistence
+- System information access
 
-[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+## 🤝 Contributing
 
-## Install Nx Console
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
+## 📄 License
 
-[Install Nx Console &raquo;](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Useful links
+## 🐛 Issues & Support
 
-Learn more:
+For bugs, feature requests, or support, please create an issue in the repository.
 
-- [Learn more about this workspace setup](https://nx.dev/getting-started/intro#learn-nx?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects)
-- [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+## 🔧 Environment Variables
 
-And join the Nx community:
-- [Discord](https://go.nx.dev/community)
-- [Follow us on X](https://twitter.com/nxdevtools) or [LinkedIn](https://www.linkedin.com/company/nrwl)
-- [Our Youtube channel](https://www.youtube.com/@nxdevtools)
-- [Our blog](https://nx.dev/blog?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+The application uses environment-specific configuration:
+
+- **Development**: Uses `environment.ts` with live reload
+- **Production**: Uses `environment.prod.ts` with optimizations
+- **Electron**: Uses `environment.electron.ts` with desktop features
+
+See the documentation for detailed configuration options.

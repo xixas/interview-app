@@ -11,6 +11,7 @@ import { TableModule } from 'primeng/table';
 import { firstValueFrom } from 'rxjs';
 import { ProficiencyLevel, Role, QuestionDifficulty } from '@interview-app/shared-interfaces';
 import { EnvironmentService } from '../../core/services/environment.service';
+import { ElectronService } from '../../core/services/electron.service';
 
 interface DashboardStats {
   totalQuestions: number;
@@ -48,6 +49,7 @@ export class DashboardComponent implements OnInit {
   private http = inject(HttpClient);
   private router = inject(Router);
   private env = inject(EnvironmentService);
+  private electron = inject(ElectronService);
 
   // Signals for reactive state management
   stats = signal<DashboardStats>({
@@ -66,6 +68,11 @@ export class DashboardComponent implements OnInit {
   loading = signal(true);
   selectedRole = signal<Role>(Role.FULLSTACK);
   selectedProficiency = signal<ProficiencyLevel>(ProficiencyLevel.MID);
+  
+  // Desktop-specific signals
+  isElectron = signal(false);
+  systemInfo = signal<any>(null);
+  appVersion = signal<string>('Web Version');
 
   // Computed values
   totalQuestions = computed(() => this.stats().totalQuestions);
@@ -157,6 +164,48 @@ export class DashboardComponent implements OnInit {
 
   async ngOnInit() {
     await this.loadDashboardData();
+    await this.initializeDesktopFeatures();
+  }
+
+  private async initializeDesktopFeatures() {
+    this.isElectron.set(this.electron.isElectron);
+    
+    if (this.electron.isElectron) {
+      try {
+        const version = await this.electron.getAppVersion();
+        this.appVersion.set(version);
+        
+        const systemInfo = await this.electron.getSystemInfo();
+        this.systemInfo.set(systemInfo);
+        
+        // Set up Electron menu event listeners
+        window.addEventListener('electron-menu', (event: any) => {
+          this.handleElectronMenuEvent(event.detail.action);
+        });
+      } catch (error) {
+        console.error('Failed to initialize desktop features:', error);
+      }
+    }
+  }
+
+  private handleElectronMenuEvent(action: string) {
+    switch (action) {
+      case 'menu-dashboard':
+        this.router.navigate(['/dashboard']);
+        break;
+      case 'menu-new-interview':
+        this.startNewInterview();
+        break;
+      case 'menu-evaluator':
+        this.router.navigate(['/evaluator']);
+        break;
+      case 'menu-export-results':
+        this.exportResults();
+        break;
+      case 'menu-about':
+        this.showAbout();
+        break;
+    }
   }
 
   async loadDashboardData() {
@@ -201,6 +250,38 @@ export class DashboardComponent implements OnInit {
 
   startPractice() {
     this.router.navigate(['/interview']);
+  }
+
+  async exportResults() {
+    if (this.electron.isElectron) {
+      const data = {
+        stats: this.stats(),
+        recentActivity: this.recentActivity(),
+        exportDate: new Date().toISOString(),
+        version: this.appVersion()
+      };
+      
+      try {
+        const result = await this.electron.exportData(data, 'dashboard-export.json');
+        if (result.success) {
+          await this.electron.showNotification(
+            'Export Successful',
+            `Dashboard data exported to ${result.filePath}`
+          );
+        }
+      } catch (error) {
+        console.error('Export failed:', error);
+      }
+    }
+  }
+
+  async showAbout() {
+    if (this.electron.isElectron) {
+      await this.electron.showNotification(
+        'About Interview App',
+        `Version: ${this.appVersion()}\nDesktop Edition`
+      );
+    }
   }
 
   getStatusSeverity(status: string): 'success' | 'info' | 'warn' | 'danger' {
