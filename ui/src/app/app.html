@@ -1,2 +1,49 @@
-<app-nx-welcome></app-nx-welcome>
-<router-outlet></router-outlet>
+<div class="app-layout">
+  <!-- Top Toolbar -->
+  <p-toolbar class="app-toolbar">
+    <div class="toolbar-left">
+      <p-button 
+        icon="pi pi-bars" 
+        [text]="true" 
+        [rounded]="true"
+        (onClick)="toggleSidebar()"
+        class="toolbar-menu-button">
+      </p-button>
+      <span class="toolbar-title">{{ title }}</span>
+    </div>
+    <div class="toolbar-right">
+      <p-button 
+        [icon]="layoutService.isDarkTheme() ? 'pi pi-sun' : 'pi pi-moon'"
+        [text]="true"
+        [rounded]="true"
+        (onClick)="toggleDarkMode()"
+        [pTooltip]="layoutService.isDarkTheme() ? 'Light Mode' : 'Dark Mode'">
+      </p-button>
+    </div>
+  </p-toolbar>
+
+  <!-- Sidebar Navigation -->
+  <p-sidebar 
+    [(visible)]="sidebarVisible" 
+    [modal]="false"
+    [showCloseIcon]="false"
+    styleClass="app-sidebar">
+    <ng-template pTemplate="header">
+      <div class="sidebar-header">
+        <i class="pi pi-graduation-cap sidebar-logo"></i>
+        <span class="sidebar-title">Interview App</span>
+      </div>
+    </ng-template>
+    
+    <p-menu 
+      [model]="menuItems" 
+      styleClass="sidebar-menu"
+      (onBlur)="sidebarVisible = false">
+    </p-menu>
+  </p-sidebar>
+
+  <!-- Main Content Area -->
+  <div class="app-content">
+    <router-outlet></router-outlet>
+  </div>
+</div>

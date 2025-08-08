@@ -42,6 +42,11 @@
           "codeCoverage": true
         }
       }
+    },
+    "@nx/js:tsc": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"]
     }
   },
   "plugins": [
@@ -76,5 +81,10 @@
       "unitTestRunner": "jest"
     }
   },
-  "defaultProject": "electron"
+  "defaultProject": "electron",
+  "release": {
+    "version": {
+      "preVersionCommand": "npx nx run-many -t build"
+    }
+  }
 }

@@ -1,0 +1,297 @@
+.dashboard-container {
+  padding: 0;
+  max-width: 100%;
+}
+
+.dashboard-header {
+  text-align: center;
+  
+  h1 {
+    color: var(--text-color);
+    margin: 0 0 0.5rem 0;
+    font-weight: 700;
+  }
+  
+  p {
+    color: var(--text-color-secondary);
+    margin: 0;
+    font-size: 1rem;
+  }
+}
+
+// Stats Cards
+.stat-card {
+  ::ng-deep .p-card {
+    background: var(--surface-card);
+    border: 1px solid var(--surface-border);
+    border-radius: var(--border-radius);
+    box-shadow: var(--card-shadow);
+    transition: all 0.3s ease;
+    
+    &:hover {
+      box-shadow: var(--card-shadow-hover);
+      transform: translateY(-2px);
+    }
+    
+    .p-card-body {
+      padding: 1.5rem;
+    }
+  }
+}
+
+.stat-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.stat-icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--border-radius);
+  background: var(--surface-hover);
+  flex-shrink: 0;
+}
+
+.stat-icon {
+  font-size: 1.5rem;
+}
+
+.stat-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: var(--text-color-secondary);
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-color);
+  line-height: 1.2;
+}
+
+// Chart Container
+.chart-container {
+  ::ng-deep canvas {
+    max-height: 300px !important;
+  }
+}
+
+// Skill Progress
+.skill-progress-list {
+  .skill-item {
+    .flex {
+      span:first-child {
+        color: var(--text-color);
+        font-weight: 500;
+      }
+      
+      span:last-child {
+        color: var(--text-color-secondary);
+        font-size: 0.875rem;
+      }
+    }
+    
+    ::ng-deep .p-progressbar {
+      height: 0.75rem;
+      background: var(--surface-ground);
+      border-radius: var(--border-radius);
+      
+      .p-progressbar-value {
+        background: linear-gradient(90deg, var(--primary-color), var(--primary-500));
+        border-radius: var(--border-radius);
+        transition: width 0.6s ease;
+      }
+    }
+  }
+}
+
+// Recommendations
+.recommendations-list {
+  .recommendation-item {
+    border: 1px solid var(--surface-border);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    
+    &:hover {
+      background: var(--surface-hover);
+      border-color: var(--primary-color);
+      transform: translateX(4px);
+    }
+    
+    .font-semibold {
+      color: var(--text-color);
+      font-weight: 600;
+    }
+    
+    .text-sm {
+      font-size: 0.875rem;
+      color: var(--text-color-secondary);
+    }
+    
+    ::ng-deep .p-button {
+      color: var(--text-color-secondary);
+      transition: color 0.3s ease;
+      
+      &:hover {
+        color: var(--primary-color);
+        background: transparent;
+      }
+    }
+  }
+}
+
+// Table Customizations
+::ng-deep .p-datatable {
+  .p-datatable-thead > tr > th {
+    background: var(--surface-section);
+    color: var(--text-color);
+    border-bottom: 1px solid var(--surface-border);
+    font-weight: 600;
+    padding: 1rem 0.75rem;
+  }
+  
+  .p-datatable-tbody > tr > td {
+    background: var(--surface-card);
+    border-bottom: 1px solid var(--surface-border);
+    color: var(--text-color);
+    padding: 1rem 0.75rem;
+  }
+  
+  .p-datatable-tbody > tr:nth-child(even) > td {
+    background: var(--surface-hover);
+  }
+  
+  .p-datatable-tbody > tr:hover > td {
+    background: var(--surface-section);
+  }
+}
+
+// Cards with headers
+::ng-deep .p-card {
+  .p-card-header {
+    background: var(--surface-section);
+    color: var(--text-color);
+    font-weight: 600;
+    border-bottom: 1px solid var(--surface-border);
+    padding: 1rem 1.5rem;
+  }
+  
+  .p-card-body {
+    background: var(--surface-card);
+    padding: 1.5rem;
+  }
+  
+  .p-card-content {
+    padding: 0;
+  }
+}
+
+// Quick Actions
+::ng-deep .p-button {
+  &.w-full {
+    justify-content: flex-start;
+    padding: 0.75rem 1rem;
+    
+    .pi {
+      margin-right: 0.5rem;
+    }
+  }
+}
+
+// Responsive Design
+@media (max-width: 1024px) {
+  .dashboard-container {
+    padding: 0;
+  }
+  
+  .stat-content {
+    gap: 0.75rem;
+  }
+  
+  .stat-icon-container {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  
+  .stat-icon {
+    font-size: 1.25rem;
+  }
+  
+  .stat-value {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .stat-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.5rem;
+  }
+  
+  .chart-container {
+    ::ng-deep canvas {
+      max-height: 250px !important;
+    }
+  }
+  
+  .recommendations-list {
+    .recommendation-item {
+      &:hover {
+        transform: none;
+      }
+    }
+  }
+}
+
+// Custom CSS variables for theme consistency
+:host {
+  --card-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  --card-shadow-hover: 0 4px 20px 0 rgba(0, 0, 0, 0.15);
+  
+  // Override in dark mode
+  &.app-dark {
+    --card-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.3);
+    --card-shadow-hover: 0 4px 20px 0 rgba(0, 0, 0, 0.4);
+  }
+}
+
+// Loading state
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: var(--text-color-secondary);
+  
+  i {
+    margin-right: 0.5rem;
+  }
+}
+
+// Empty state styling
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-color-secondary);
+  
+  i {
+    margin-bottom: 1rem;
+    opacity: 0.6;
+  }
+  
+  span {
+    font-size: 1rem;
+  }
+}

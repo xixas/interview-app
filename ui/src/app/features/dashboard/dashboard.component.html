@@ -1,0 +1,284 @@
+<div class="dashboard-container">
+  <div class="dashboard-header mb-4">
+    <h1 class="text-2xl font-bold m-0">Dashboard</h1>
+    <p class="text-color-secondary mt-2">Welcome back! Here's your interview preparation overview.</p>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="grid grid-cols-12 gap-4 mb-4">
+    <div class="col-span-12 md:col-span-6 lg:col-span-3">
+      <p-card styleClass="stat-card">
+        <div class="stat-content">
+          <div class="stat-icon-container">
+            <i class="pi pi-question-circle stat-icon text-blue-500"></i>
+          </div>
+          <div class="stat-details">
+            <span class="stat-label">Total Questions</span>
+            <span class="stat-value">{{ totalQuestions() }}</span>
+          </div>
+        </div>
+      </p-card>
+    </div>
+
+    <div class="col-span-12 md:col-span-6 lg:col-span-3">
+      <p-card styleClass="stat-card">
+        <div class="stat-content">
+          <div class="stat-icon-container">
+            <i class="pi pi-code stat-icon text-green-500"></i>
+          </div>
+          <div class="stat-details">
+            <span class="stat-label">Technologies</span>
+            <span class="stat-value">{{ stats().totalTechnologies }}</span>
+          </div>
+        </div>
+      </p-card>
+    </div>
+
+    <div class="col-span-12 md:col-span-6 lg:col-span-3">
+      <p-card styleClass="stat-card">
+        <div class="stat-content">
+          <div class="stat-icon-container">
+            <i class="pi pi-check-circle stat-icon text-purple-500"></i>
+          </div>
+          <div class="stat-details">
+            <span class="stat-label">Completed</span>
+            <span class="stat-value">{{ stats().completedInterviews }}</span>
+          </div>
+        </div>
+      </p-card>
+    </div>
+
+    <div class="col-span-12 md:col-span-6 lg:col-span-3">
+      <p-card styleClass="stat-card">
+        <div class="stat-content">
+          <div class="stat-icon-container">
+            <i class="pi pi-chart-line stat-icon text-orange-500"></i>
+          </div>
+          <div class="stat-details">
+            <span class="stat-label">Avg Score</span>
+            <span class="stat-value">{{ averageScorePercentage() }}%</span>
+          </div>
+        </div>
+      </p-card>
+    </div>
+  </div>
+
+  <!-- Main Content Grid -->
+  <div class="grid grid-cols-12 gap-4">
+    <!-- Quick Actions -->
+    <div class="col-span-12 lg:col-span-4">
+      <p-card header="Quick Actions" styleClass="h-full">
+        <div class="flex flex-column gap-3">
+          <p-button 
+            label="Start New Interview" 
+            icon="pi pi-microphone" 
+            styleClass="w-full"
+            (onClick)="startNewInterview()">
+          </p-button>
+          <p-button 
+            label="Practice Questions" 
+            icon="pi pi-book" 
+            severity="secondary"
+            styleClass="w-full"
+            (onClick)="startPractice()">
+          </p-button>
+          <p-button 
+            label="View Analytics" 
+            icon="pi pi-chart-bar" 
+            severity="info"
+            styleClass="w-full">
+          </p-button>
+          <p-button 
+            label="Browse Questions" 
+            icon="pi pi-search" 
+            severity="help"
+            styleClass="w-full">
+          </p-button>
+        </div>
+      </p-card>
+    </div>
+
+    <!-- Questions Distribution Chart -->
+    <div class="col-span-12 lg:col-span-8">
+      <p-card header="Questions by Difficulty">
+        <div class="chart-container">
+          @if (!loading()) {
+            <p-chart 
+              type="bar" 
+              [data]="chartData()" 
+              [options]="chartOptions"
+              [style]="{'height': '300px'}">
+            </p-chart>
+          } @else {
+            <div class="flex align-items-center justify-content-center" style="height: 300px;">
+              <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+            </div>
+          }
+        </div>
+      </p-card>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="col-span-12">
+      <p-card header="Recent Activity">
+        <p-table 
+          [value]="recentActivity()" 
+          [tableStyle]="{ 'min-width': '50rem' }"
+          styleClass="p-datatable-sm">
+          <ng-template pTemplate="header">
+            <tr>
+              <th style="width: 4rem"></th>
+              <th>Date</th>
+              <th>Activity</th>
+              <th>Score</th>
+              <th>Status</th>
+              <th style="width: 8rem">Actions</th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-activity>
+            <tr>
+              <td class="text-center">
+                <i [class]="getActivityIcon(activity.type)" class="text-lg"></i>
+              </td>
+              <td>{{ activity.date | date:'short' }}</td>
+              <td>{{ activity.title }}</td>
+              <td>
+                @if (activity.score) {
+                  <p-tag 
+                    [value]="activity.score + '%'" 
+                    [severity]="getScoreSeverity(activity.score)">
+                  </p-tag>
+                } @else {
+                  <span class="text-color-secondary">-</span>
+                }
+              </td>
+              <td>
+                <p-tag 
+                  [value]="activity.status" 
+                  [severity]="getStatusSeverity(activity.status)">
+                </p-tag>
+              </td>
+              <td>
+                <p-button 
+                  icon="pi pi-eye" 
+                  [text]="true" 
+                  [rounded]="true"
+                  size="small"
+                  pTooltip="View Details">
+                </p-button>
+                <p-button 
+                  icon="pi pi-replay" 
+                  [text]="true" 
+                  [rounded]="true"
+                  size="small"
+                  pTooltip="Retry">
+                </p-button>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="emptymessage">
+            <tr>
+              <td colspan="6" class="text-center p-4">
+                <div class="flex flex-column align-items-center gap-3">
+                  <i class="pi pi-inbox text-4xl text-color-secondary"></i>
+                  <span class="text-color-secondary">No activity yet. Start your first interview!</span>
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </p-card>
+    </div>
+
+    <!-- Progress Overview -->
+    <div class="col-span-12 lg:col-span-6">
+      <p-card header="Skill Progress">
+        <div class="skill-progress-list">
+          <div class="skill-item mb-3">
+            <div class="flex justify-content-between mb-2">
+              <span>JavaScript</span>
+              <span class="font-semibold">85%</span>
+            </div>
+            <p-progressBar [value]="85" [showValue]="false"></p-progressBar>
+          </div>
+          <div class="skill-item mb-3">
+            <div class="flex justify-content-between mb-2">
+              <span>React</span>
+              <span class="font-semibold">78%</span>
+            </div>
+            <p-progressBar [value]="78" [showValue]="false"></p-progressBar>
+          </div>
+          <div class="skill-item mb-3">
+            <div class="flex justify-content-between mb-2">
+              <span>Node.js</span>
+              <span class="font-semibold">72%</span>
+            </div>
+            <p-progressBar [value]="72" [showValue]="false"></p-progressBar>
+          </div>
+          <div class="skill-item mb-3">
+            <div class="flex justify-content-between mb-2">
+              <span>System Design</span>
+              <span class="font-semibold">65%</span>
+            </div>
+            <p-progressBar [value]="65" [showValue]="false"></p-progressBar>
+          </div>
+          <div class="skill-item">
+            <div class="flex justify-content-between mb-2">
+              <span>Behavioral</span>
+              <span class="font-semibold">90%</span>
+            </div>
+            <p-progressBar [value]="90" [showValue]="false"></p-progressBar>
+          </div>
+        </div>
+      </p-card>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="col-span-12 lg:col-span-6">
+      <p-card header="Recommended Topics">
+        <div class="recommendations-list">
+          <div class="recommendation-item p-3 mb-2 surface-hover border-round">
+            <div class="flex align-items-center gap-3">
+              <i class="pi pi-lightbulb text-yellow-500 text-xl"></i>
+              <div class="flex-1">
+                <div class="font-semibold">Advanced React Patterns</div>
+                <div class="text-sm text-color-secondary">Improve your React expertise</div>
+              </div>
+              <p-button icon="pi pi-arrow-right" [text]="true" [rounded]="true"></p-button>
+            </div>
+          </div>
+          <div class="recommendation-item p-3 mb-2 surface-hover border-round">
+            <div class="flex align-items-center gap-3">
+              <i class="pi pi-server text-blue-500 text-xl"></i>
+              <div class="flex-1">
+                <div class="font-semibold">System Design Basics</div>
+                <div class="text-sm text-color-secondary">Master distributed systems</div>
+              </div>
+              <p-button icon="pi pi-arrow-right" [text]="true" [rounded]="true"></p-button>
+            </div>
+          </div>
+          <div class="recommendation-item p-3 mb-2 surface-hover border-round">
+            <div class="flex align-items-center gap-3">
+              <i class="pi pi-database text-green-500 text-xl"></i>
+              <div class="flex-1">
+                <div class="font-semibold">Database Optimization</div>
+                <div class="text-sm text-color-secondary">Learn query optimization</div>
+              </div>
+              <p-button icon="pi pi-arrow-right" [text]="true" [rounded]="true"></p-button>
+            </div>
+          </div>
+          <div class="recommendation-item p-3 surface-hover border-round">
+            <div class="flex align-items-center gap-3">
+              <i class="pi pi-shield text-purple-500 text-xl"></i>
+              <div class="flex-1">
+                <div class="font-semibold">Security Best Practices</div>
+                <div class="text-sm text-color-secondary">Secure coding techniques</div>
+              </div>
+              <p-button icon="pi pi-arrow-right" [text]="true" [rounded]="true"></p-button>
+            </div>
+          </div>
+        </div>
+      </p-card>
+    </div>
+  </div>
+</div>
