@@ -14,6 +14,13 @@
     ],
     "sharedGlobals": ["{workspaceRoot}/.github/workflows/ci.yml"]
   },
+  "workspaceLayout": {
+    "appsDir": ".",
+    "libsDir": "."
+  },
+  "implicitDependencies": {
+    "examples/**/*": []
+  },
   "nxCloudId": "6895eeced256004daaa0f4b2",
   "targetDefaults": {
     "@angular/build:application": {

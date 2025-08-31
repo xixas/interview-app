@@ -1,561 +1,342 @@
-import { Component, OnInit, OnDestroy, signal, computed, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
+import { FormsModule } from '@angular/forms';
+import { FluidModule } from 'primeng/fluid';
 import { CardModule } from 'primeng/card';
 import { ButtonModule } from 'primeng/button';
-import { InputTextModule } from 'primeng/inputtext';
 import { TextareaModule } from 'primeng/textarea';
-import { SelectModule } from 'primeng/select';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { TagModule } from 'primeng/tag';
-import { MessageModule } from 'primeng/message';
 import { DividerModule } from 'primeng/divider';
-import { firstValueFrom } from 'rxjs';
-import { EnvironmentService } from '../../core/services/environment.service';
-import { DebugService } from '../../core/services/debug.service';
-
-interface RecordingResult {
-  audioBlob: Blob;
-  audioUrl: string;
-  duration: number;
-  mimeType: string;
-}
-
-interface TranscriptionInfo {
-  text: string;
-  confidence: number;
-  duration: number;
-  language?: string;
-}
-
-interface EvaluationResult {
-  overallScore: number;
-  maxScore: number;
-  percentage: number;
-  recommendation: 'PASS' | 'CONDITIONAL' | 'FAIL';
-  transcription: string;
-  criteria: Record<string, number>;
-  criteriaFeedback?: Record<string, string>;
-  applicableCriteria: string[];
-  strengths: string[];
-  improvements: string[];
-  detailedFeedback: string;
-  nextSteps: string[];
-  audioAnalysis?: {
-    readingAnomalies?: {
-      isLikelyReading: boolean;
-      naturalityScore: number;
-      explanation: string;
-      readingIndicators: string[];
-    };
-  };
-}
-
-interface SampleQuestion {
-  question: string;
-  role: string;
-  level: string;
-  roleValue: string;
-  levelValue: string;
-}
+import { TooltipModule } from 'primeng/tooltip';
+import { SelectModule } from 'primeng/select';
+import { MessageModule } from 'primeng/message';
+import { SkeletonModule } from 'primeng/skeleton';
+import { ToolbarModule } from 'primeng/toolbar';
+import { EvaluatorApiService, DemoData } from './services/evaluator-api.service';
+import { EvaluatorIpcService } from '../../core/services/evaluator-ipc.service';
+import { 
+  EvaluationResult, 
+  ProficiencyLevel, 
+  Role, 
+  QuestionType 
+} from '@interview-app/shared-interfaces';
 
 @Component({
-  selector: 'app-evaluator',
-  imports: [
-    CommonModule,
-    ReactiveFormsModule,
-    CardModule,
-    ButtonModule,
-    InputTextModule,
-    TextareaModule,
-    SelectModule,
-    ProgressBarModule,
-    TagModule,
-    MessageModule,
-    DividerModule
-  ],
-  templateUrl: './evaluator.component.html',
-  styleUrl: './evaluator.component.scss',
-  changeDetection: ChangeDetectionStrategy.OnPush
+    selector: 'app-evaluator',
+    standalone: true,
+    imports: [
+        CommonModule,
+        FormsModule,
+        FluidModule,
+        CardModule,
+        ButtonModule,
+        TextareaModule,
+        ProgressBarModule,
+        TagModule,
+        DividerModule,
+        TooltipModule,
+        SelectModule,
+        MessageModule,
+        SkeletonModule,
+        ToolbarModule
+    ],
+    changeDetection: ChangeDetectionStrategy.OnPush,
+    templateUrl: './evaluator.component.html',
+    styleUrls: ['./evaluator.component.scss']
 })
-export class EvaluatorComponent implements OnInit, OnDestroy {
-  private fb = inject(FormBuilder);
-  private http = inject(HttpClient);
-  private router = inject(Router);
-  protected env = inject(EnvironmentService);
-  private debug = inject(DebugService);
+export class EvaluatorComponent implements OnInit {
+    private readonly evaluatorApi = inject(EvaluatorApiService);
+    private readonly evaluatorIpc = inject(EvaluatorIpcService);
 
-  // Form and state management
-  evaluationForm: FormGroup;
-  isLoading = signal(false);
-  error = signal<string | null>(null);
-  evaluationResult = signal<EvaluationResult | null>(null);
-  apiStatus = signal<string>('Checking...');
-  
-  // Audio recording state
-  lastTranscription = signal<TranscriptionInfo | null>(null);
-  lastRecording = signal<RecordingResult | null>(null);
-  isRecording = signal(false);
-  isProcessing = signal(false);
-  processingStatus = signal('');
-  recordingDuration = signal(0);
-  isPlaying = signal(false);
-  playbackDuration = signal(0);
+    // Form state
+    answer = '';
+    selectedRole: Role | null = null;
+    selectedLevel: ProficiencyLevel | null = null;  
+    selectedType: QuestionType = QuestionType.TECHNICAL;
 
-  // Private audio handling
-  private mediaRecorder: MediaRecorder | null = null;
-  private audioChunks: Blob[] = [];
-  private recordingTimer: any = null;
-  private audioElement: HTMLAudioElement | null = null;
+    // Component state
+    currentQuestion = signal('Click "Generate New Question" or "Load Sample" to get started with an interview question.');
+    isEvaluating = signal(false);
+    evaluation = signal<EvaluationResult | null>(null);
+    errorMessage = signal('');
+    serviceStatus = signal<'available' | 'unavailable' | 'checking'>('checking');
+    demoData = signal<DemoData | null>(null);
+    isCheckingService = signal(false);
+    retryCount = signal(0);
 
-  // Dropdown options
-  readonly roleOptions = [
-    { label: '🖥️ Frontend Developer', value: 'frontend' },
-    { label: '⚙️ Backend Developer', value: 'backend' },
-    { label: '🔄 Full-stack Developer', value: 'fullstack' },
-    { label: '🚀 DevOps Engineer', value: 'devops' },
-    { label: '📱 Mobile Developer', value: 'mobile' },
-    { label: '📊 Data Scientist', value: 'data-science' },
-    { label: '🧪 QA Engineer', value: 'qa' }
-  ];
+    // Dropdown options
+    roleOptions = [
+        { label: 'Frontend Developer', value: Role.FRONTEND },
+        { label: 'Backend Developer', value: Role.BACKEND },
+        { label: 'Full Stack Developer', value: Role.FULLSTACK },
+        { label: 'DevOps Engineer', value: Role.DEVOPS },
+        { label: 'Mobile Developer', value: Role.MOBILE },
+        { label: 'Data Scientist', value: Role.DATA_SCIENCE },
+        { label: 'QA Engineer', value: Role.QA }
+    ];
 
-  readonly proficiencyOptions = [
-    { label: '🌱 Junior (0-2 years)', value: 'junior' },
-    { label: '🌿 Mid-level (2-5 years)', value: 'mid' },
-    { label: '🌳 Senior (5-8+ years)', value: 'senior' },
-    { label: '🎯 Tech Lead (8+ years)', value: 'lead' }
-  ];
+    levelOptions = [
+        { label: 'Junior (0-2 years)', value: ProficiencyLevel.JUNIOR },
+        { label: 'Mid-level (2-5 years)', value: ProficiencyLevel.MID },
+        { label: 'Senior (5+ years)', value: ProficiencyLevel.SENIOR },
+        { label: 'Lead/Principal (8+ years)', value: ProficiencyLevel.LEAD }
+    ];
 
-  readonly questionTypeOptions = [
-    { label: '💻 Technical', value: 'technical' },
-    { label: '👥 Behavioral', value: 'behavioral' },
-    { label: '🏗️ System Design', value: 'system-design' },
-    { label: '⚡ Coding', value: 'coding' }
-  ];
+    typeOptions = [
+        { label: 'Technical Knowledge', value: QuestionType.TECHNICAL },
+        { label: 'Behavioral/Situational', value: QuestionType.BEHAVIORAL },
+        { label: 'System Design', value: QuestionType.SYSTEM_DESIGN },
+        { label: 'Coding/Algorithm', value: QuestionType.CODING }
+    ];
 
-  readonly sampleQuestions: SampleQuestion[] = [
-    {
-      question: 'What is the difference between React hooks and class components?',
-      role: 'Frontend',
-      level: 'Mid',
-      roleValue: 'frontend',
-      levelValue: 'mid',
-    },
-    {
-      question: 'Explain the difference between SQL and NoSQL databases. When would you use each?',
-      role: 'Backend',
-      level: 'Senior', 
-      roleValue: 'backend',
-      levelValue: 'senior',
-    },
-    {
-      question: 'How would you optimize the performance of a slow-loading web application?',
-      role: 'Full-stack',
-      level: 'Senior',
-      roleValue: 'fullstack',
-      levelValue: 'senior',
-    },
-    {
-      question: 'Describe a challenging bug you faced and how you resolved it.',
-      role: 'All',
-      level: 'Mid',
-      roleValue: 'fullstack',
-      levelValue: 'mid',
-    },
-  ];
-
-  // Computed properties
-  apiStatusSeverity = computed(() => {
-    const status = this.apiStatus();
-    if (status.includes('Connected')) return 'success';
-    if (status.includes('Error')) return 'danger';
-    return 'warn';
-  });
-
-  canEvaluate = computed(() => {
-    return this.evaluationForm.valid && 
-           this.lastRecording() && 
-           !this.isLoading() && 
-           !this.isProcessing() &&
-           this.env.isFeatureEnabled('aiAnalysis');
-  });
-
-  canRecord = computed(() => {
-    return this.env.isFeatureEnabled('audioRecording') && !this.isProcessing();
-  });
-
-  criteriaArray = computed(() => {
-    const result = this.evaluationResult();
-    if (!result) return [];
-
-    const applicableCriteria = result.applicableCriteria || Object.keys(result.criteria);
-    
-    return Object.entries(result.criteria)
-      .filter(([key, value]) => 
-        applicableCriteria.includes(key) && (value as number) > 0
-      )
-      .map(([key, value]) => ({
-        key,
-        value: value as number,
-        name: this.formatCriterionName(key),
-        feedback: result.criteriaFeedback?.[key] || null
-      }));
-  });
-
-  constructor() {
-    this.evaluationForm = this.fb.group({
-      question: ['', [Validators.required, Validators.minLength(10)]],
-      role: ['frontend', [Validators.required]],
-      proficiencyLevel: ['mid', [Validators.required]],
-      questionType: ['technical'],
-      context: [''],
-    });
-
-    if (!this.env.production) {
-      this.debug.logFeatureUsage('evaluator', true);
-    }
-  }
-
-  async ngOnInit() {
-    await this.checkApiStatus();
-  }
-
-  ngOnDestroy() {
-    this.stopPlayback();
-    
-    if (this.recordingTimer) {
-      clearInterval(this.recordingTimer);
-      this.recordingTimer = null;
-    }
-    
-    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-      this.mediaRecorder.stop();
-    }
-  }
-
-  private async checkApiStatus() {
-    if (!this.env.isFeatureEnabled('aiAnalysis')) {
-      this.apiStatus.set('❌ AI Analysis Disabled');
-      return;
+    ngOnInit() {
+        this.checkServiceHealth();
+        this.loadDemoData();
     }
 
-    try {
-      await firstValueFrom(
-        this.http.get(this.env.getEvaluatorEndpoint('/health'))
-      );
-      this.apiStatus.set('✅ API Connected');
-    } catch (error) {
-      this.apiStatus.set('❌ API Error');
-      this.debug.error('Evaluator API health check failed', error);
-    }
-  }
-
-  async startRecording(): Promise<void> {
-    if (!this.canRecord()) {
-      this.error.set('Audio recording is not available');
-      return;
+    canEvaluate(): boolean {
+        return this.answer.trim().length > 10 && !!this.selectedRole && !!this.selectedLevel;
     }
 
-    try {
-      const startTime = performance.now();
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 44100
-        }
-      });
-      
-      this.audioChunks = [];
-      this.mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
-      
-      this.mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          this.audioChunks.push(event.data);
-        }
-      };
-      
-      this.mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-        const audioUrl = URL.createObjectURL(audioBlob);
+    getWordCount(text: string): number {
+        return text.trim().split(/\s+/).filter(word => word.length > 0).length;
+    }
+
+    async checkServiceHealth() {
+        this.isCheckingService.set(true);
+        this.serviceStatus.set('checking');
         
-        this.lastRecording.set({
-          audioBlob,
-          audioUrl,
-          duration: this.recordingDuration(),
-          mimeType: 'audio/webm'
+        this.evaluatorApi.healthCheck().subscribe({
+            next: (response) => {
+                this.serviceStatus.set(response.status === 'healthy' ? 'available' : 'unavailable');
+                if (response.status !== 'healthy') {
+                    this.errorMessage.set('Evaluation service is not ready. Please check your API key configuration.');
+                }
+                this.isCheckingService.set(false);
+            },
+            error: (error) => {
+                this.serviceStatus.set('unavailable');
+                this.isCheckingService.set(false);
+                
+                if (error.status === 0) {
+                    this.errorMessage.set('Cannot connect to evaluation service. Please ensure the service is running.');
+                } else if (error.status === 401) {
+                    this.errorMessage.set('API key authentication failed. Please check your OpenAI API key in Settings.');
+                } else if (error.status === 429) {
+                    this.errorMessage.set('API rate limit exceeded. Please wait a moment before trying again.');
+                } else {
+                    this.errorMessage.set(`Service unavailable: ${error.message || 'Unknown error'}`);
+                }
+            }
         });
-        
-        // Stop all tracks to release microphone
-        stream.getTracks().forEach(track => track.stop());
-        this.debug.logPerformance('Audio Recording', startTime);
-      };
-      
-      this.mediaRecorder.start(100);
-      this.isRecording.set(true);
-      this.recordingDuration.set(0);
-      
-      // Start timer
-      this.recordingTimer = setInterval(() => {
-        this.recordingDuration.set(this.recordingDuration() + 1);
-        
-        // Auto-stop after environment limit
-        if (this.recordingDuration() >= 300) { // 5 minutes max
-          this.stopRecording();
+    }
+
+    loadDemoData() {
+        this.evaluatorApi.getDemoData().subscribe({
+            next: (data) => {
+                this.demoData.set(data);
+            },
+            error: (error) => {
+                console.warn('Could not load demo data:', error);
+                // Provide fallback demo data
+                this.demoData.set({
+                    sampleQuestion: 'Explain the difference between let, const, and var in JavaScript.',
+                    sampleAnswer: 'var is function-scoped and can be hoisted, let is block-scoped and cannot be redeclared in the same scope, const is block-scoped and cannot be reassigned after declaration.',
+                    availableRoles: this.roleOptions.map(opt => opt.label),
+                    availableProficiencyLevels: this.levelOptions.map(opt => opt.label),
+                    questionTypes: this.typeOptions.map(opt => opt.label)
+                });
+            }
+        });
+    }
+
+    loadSampleData() {
+        const demo = this.demoData();
+        if (demo) {
+            this.currentQuestion.set(demo.sampleQuestion);
+            this.answer = demo.sampleAnswer;
+            this.selectedRole = Role.FRONTEND;
+            this.selectedLevel = ProficiencyLevel.MID;
+            this.selectedType = QuestionType.TECHNICAL;
         }
-      }, 1000);
-      
-    } catch (error) {
-      console.error('Failed to start recording:', error);
-      this.error.set('Failed to access microphone. Please check permissions.');
-      setTimeout(() => this.error.set(null), 5000);
-    }
-  }
-
-  stopRecording(): void {
-    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-      this.mediaRecorder.stop();
-      this.isRecording.set(false);
-      
-      if (this.recordingTimer) {
-        clearInterval(this.recordingTimer);
-        this.recordingTimer = null;
-      }
-    }
-  }
-
-  async processRecording(): Promise<void> {
-    const recording = this.lastRecording();
-    if (!recording) return;
-    
-    this.isProcessing.set(true);
-    this.processingStatus.set('Transcribing audio...');
-    
-    try {
-      const audioFile = new File([recording.audioBlob], 'recording.webm', { type: 'audio/webm' });
-      
-      const transcription = await firstValueFrom(
-        this.http.post<TranscriptionInfo>(this.env.getEvaluatorEndpoint('/transcribe'), 
-          { audio: audioFile }
-        )
-      );
-      
-      this.lastTranscription.set(transcription);
-      this.processingStatus.set('Audio transcribed successfully!');
-      
-      setTimeout(() => {
-        this.isProcessing.set(false);
-        this.processingStatus.set('');
-      }, 1000);
-      
-    } catch (error: any) {
-      console.error('Failed to process recording:', error);
-      this.error.set(error.message || 'Failed to process recording');
-      this.isProcessing.set(false);
-      this.processingStatus.set('');
-      setTimeout(() => this.error.set(null), 5000);
-    }
-  }
-
-  async evaluateAudioRecording() {
-    if (!this.canEvaluate()) return;
-
-    const recording = this.lastRecording();
-    if (!recording) return;
-
-    this.isLoading.set(true);
-    this.error.set(null);
-    this.evaluationResult.set(null);
-
-    try {
-      const startTime = performance.now();
-      const formData = this.evaluationForm.value;
-      const audioFile = new File([recording.audioBlob], 'recording.webm', { type: 'audio/webm' });
-      
-      // Create FormData for file upload
-      const uploadData = new FormData();
-      uploadData.append('audio', audioFile);
-      uploadData.append('question', formData.question);
-      uploadData.append('role', formData.role);
-      uploadData.append('proficiencyLevel', formData.proficiencyLevel);
-      uploadData.append('questionType', formData.questionType);
-      uploadData.append('context', formData.context || '');
-      
-      const result = await firstValueFrom(
-        this.http.post<EvaluationResult>(this.env.getEvaluatorEndpoint('/evaluate-audio'), uploadData)
-      );
-      
-      this.evaluationResult.set(result);
-      this.debug.logPerformance('Audio Evaluation', startTime);
-      
-    } catch (error: any) {
-      this.error.set(error.message || 'Failed to evaluate answer. Please check if the API service is running.');
-      this.debug.error('Audio evaluation failed', error);
-    } finally {
-      this.isLoading.set(false);
-    }
-  }
-
-  useSampleQuestion(sample: SampleQuestion) {
-    this.evaluationForm.patchValue({
-      question: sample.question,
-      role: sample.roleValue,
-      proficiencyLevel: sample.levelValue,
-      questionType: 'technical',
-      context: 'Interview practice',
-    });
-  }
-
-  togglePlayback(): void {
-    const recording = this.lastRecording();
-    if (!recording) return;
-
-    if (this.isPlaying()) {
-      this.stopPlayback();
-    } else {
-      this.startPlayback(recording);
-    }
-  }
-
-  private startPlayback(recording: RecordingResult): void {
-    this.stopPlayback();
-
-    this.audioElement = new Audio(recording.audioUrl);
-    this.audioElement.onloadedmetadata = () => {
-      this.playbackDuration.set(0);
-      this.isPlaying.set(true);
-    };
-
-    this.audioElement.onended = () => {
-      this.stopPlayback();
-    };
-
-    this.audioElement.onerror = (error) => {
-      console.error('Audio playback error:', error);
-      this.error.set('Failed to play audio recording');
-      this.stopPlayback();
-      setTimeout(() => this.error.set(null), 3000);
-    };
-
-    this.audioElement.ontimeupdate = () => {
-      if (this.audioElement) {
-        this.playbackDuration.set(Math.floor(this.audioElement.currentTime));
-      }
-    };
-
-    this.audioElement.play().catch(error => {
-      console.error('Failed to start audio playback:', error);
-      this.error.set('Failed to start audio playback');
-      this.stopPlayback();
-      setTimeout(() => this.error.set(null), 3000);
-    });
-  }
-
-  private stopPlayback(): void {
-    if (this.audioElement) {
-      this.audioElement.pause();
-      this.audioElement.currentTime = 0;
-      this.audioElement = null;
     }
 
-    this.isPlaying.set(false);
-    this.playbackDuration.set(0);
-  }
-
-  formatTime(seconds: number): string {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-
-  formatCriterionName(key: string): string {
-    return key.replace(/([A-Z])/g, ' $1').trim();
-  }
-
-  getScoreColor(percentage: number): string {
-    if (percentage >= 80) return 'text-green-600';
-    if (percentage >= 60) return 'text-yellow-600';
-    return 'text-red-600';
-  }
-
-  getScoreBarColor(score: number): string {
-    if (score >= 8) return 'bg-green-500';
-    if (score >= 6) return 'bg-yellow-500';
-    if (score >= 4) return 'bg-orange-500';
-    return 'bg-red-500';
-  }
-
-  getScorePercentage(score: number): number {
-    return Math.min(score * 10, 100);
-  }
-
-  getRecommendationSeverity(recommendation: string): 'success' | 'warn' | 'danger' | 'info' {
-    switch (recommendation) {
-      case 'PASS': return 'success';
-      case 'CONDITIONAL': return 'warn';
-      case 'FAIL': return 'danger';
-      default: return 'info';
+    resetForm() {
+        this.answer = '';
+        this.selectedRole = null;
+        this.selectedLevel = null;
+        this.selectedType = QuestionType.TECHNICAL;
+        this.evaluation.set(null);
+        this.errorMessage.set('');
+        this.currentQuestion.set('Click "Generate New Question" or "Load Sample" to get started with an interview question.');
     }
-  }
 
-  getTranscriptionWordCount(): number {
-    const transcription = this.lastTranscription();
-    return transcription ? transcription.text.trim().split(/\s+/).length : 0;
-  }
+    generateNewQuestion() {
+        const questions = {
+            [QuestionType.TECHNICAL]: [
+                'Explain the event loop in JavaScript and how it handles asynchronous operations.',
+                'What are the differences between SQL and NoSQL databases? When would you use each?',
+                'Describe the concept of RESTful APIs and the principles behind REST architecture.',
+                'Explain how CSS specificity works and provide examples of different specificity levels.'
+            ],
+            [QuestionType.BEHAVIORAL]: [
+                'Tell me about a time when you had to work with a difficult team member. How did you handle the situation?',
+                'Describe a challenging project you worked on. What obstacles did you face and how did you overcome them?',
+                'Give me an example of when you had to learn a new technology quickly for a project.'
+            ],
+            [QuestionType.SYSTEM_DESIGN]: [
+                'Design a URL shortening service like bit.ly. Consider scalability, reliability, and performance.',
+                'How would you design a real-time chat application that can handle millions of users?',
+                'Design a caching system for a high-traffic e-commerce website.'
+            ],
+            [QuestionType.CODING]: [
+                'Write a function to find the longest substring without repeating characters.',
+                'Implement a function to reverse a linked list.',
+                'Design an algorithm to find the shortest path between two nodes in a graph.'
+            ]
+        };
 
-  // Reading detection methods
-  isReadingDetected(): boolean {
-    const result = this.evaluationResult();
-    return !!(result as any)?.audioAnalysis?.readingAnomalies?.isLikelyReading;
-  }
-
-  getReadingScore(): number {
-    const result = this.evaluationResult();
-    return (result as any)?.audioAnalysis?.readingAnomalies?.naturalityScore || 10;
-  }
-
-  getReadingExplanation(): string {
-    const result = this.evaluationResult();
-    return (result as any)?.audioAnalysis?.readingAnomalies?.explanation || 'Natural speech detected';
-  }
-
-  getReadingIndicators(): string[] {
-    const result = this.evaluationResult();
-    return (result as any)?.audioAnalysis?.readingAnomalies?.readingIndicators || [];
-  }
-
-  hasAudioAnalysis(): boolean {
-    const result = this.evaluationResult();
-    return !!(result as any)?.audioAnalysis;
-  }
-
-  getReadingAnalysisSeverity(): 'success' | 'warn' | 'danger' {
-    if (this.isReadingDetected()) return 'danger';
-    return 'success';
-  }
-
-  getReadingScoreSeverity(): 'success' | 'warn' | 'danger' {
-    const score = this.getReadingScore();
-    if (score <= 3) return 'danger';
-    if (score <= 6) return 'warn';
-    return 'success';
-  }
-
-  getImprovementSeverity(improvement: string): 'warn' | 'danger' {
-    if (improvement.includes('🚨 READING DETECTED') || 
-        improvement.includes('reading from a script') ||
-        improvement.includes('READING BEHAVIOR')) {
-      return 'danger';
+        const typeQuestions = questions[this.selectedType] || questions[QuestionType.TECHNICAL];
+        const randomQuestion = typeQuestions[Math.floor(Math.random() * typeQuestions.length)];
+        this.currentQuestion.set(randomQuestion);
     }
-    return 'warn';
-  }
 
-  goToDashboard() {
-    this.router.navigate(['/dashboard']);
-  }
+    async evaluateAnswer() {
+        if (!this.canEvaluate()) {
+            this.errorMessage.set('Please provide an answer and select both role and experience level.');
+            return;
+        }
+
+        this.isEvaluating.set(true);
+        this.errorMessage.set('');
+        this.evaluation.set(null);
+
+        try {
+            // Check if service is available before attempting evaluation
+            if (this.serviceStatus() === 'unavailable') {
+                throw new Error('Evaluation service is not available. Please check your configuration.');
+            }
+
+            const request = {
+                questionId: Date.now().toString(), // Generate a unique ID
+                question: this.currentQuestion(),
+                answer: this.answer,
+                technology: this.selectedRole?.toLowerCase() || 'general',
+                difficulty: this.selectedLevel?.toLowerCase() || 'medium',
+                timeSpent: 0 // Could be tracked in the future
+            };
+
+            const result = await this.evaluatorIpc.evaluateAnswer(request);
+            this.retryCount.set(0); // Reset retry count on success
+            
+            // Convert IPC response to expected UI format
+            const evaluation: EvaluationResult = {
+                overallScore: result.score,
+                maxScore: 100,
+                percentage: result.score,
+                criteria: {
+                    technicalAccuracy: result.technicalAccuracy,
+                    clarity: result.communication, // Map communication to clarity
+                    completeness: result.completeness,
+                    problemSolving: Math.round((result.technicalAccuracy + result.completeness) / 2), // Calculated
+                    communication: result.communication,
+                    bestPractices: Math.round((result.technicalAccuracy + result.communication) / 2) // Calculated
+                },
+                strengths: result.strengths,
+                improvements: result.improvements,
+                detailedFeedback: result.feedback,
+                recommendation: result.score >= 80 ? 'PASS' : result.score >= 60 ? 'CONDITIONAL' : 'FAIL',
+                nextSteps: result.improvements.map((imp: string) => `Work on: ${imp}`)
+            };
+
+            console.log('Evaluation completed:', evaluation);
+            this.evaluation.set(evaluation);
+        } catch (error: any) {
+            console.error('Evaluation failed:', error);
+            
+            // Provide specific error messages based on error type
+            if (error.message?.includes('Desktop mode is required')) {
+                this.errorMessage.set('AI evaluation requires the desktop version of the app. Please use the desktop client.');
+            } else if (error.message?.includes('API key')) {
+                this.errorMessage.set('OpenAI API key is not configured or invalid. Please check your Settings.');
+            } else if (error.message?.includes('rate limit') || error.status === 429) {
+                this.errorMessage.set('API rate limit exceeded. Please wait a moment before trying again.');
+            } else if (error.message?.includes('network') || error.status === 0) {
+                this.errorMessage.set('Network error. Please check your internet connection and try again.');
+            } else if (error.status === 401) {
+                this.errorMessage.set('Authentication failed. Please verify your API key in Settings.');
+            } else if (error.status >= 500) {
+                this.errorMessage.set('Server error. The evaluation service is temporarily unavailable.');
+            } else {
+                this.errorMessage.set(`Evaluation failed: ${error.message || 'Please try again later.'}`);
+            }
+            
+            // Increment retry count for potential auto-retry logic
+            this.retryCount.update(count => count + 1);
+        } finally {
+            this.isEvaluating.set(false);
+        }
+    }
+
+    getCriteriaItems() {
+        const evaluation = this.evaluation();
+        if (!evaluation) return [];
+
+        const criteriaLabels = {
+            technicalAccuracy: 'Technical Accuracy',
+            clarity: 'Clarity & Structure',
+            completeness: 'Completeness',
+            problemSolving: 'Problem Solving',
+            communication: 'Communication',
+            bestPractices: 'Best Practices'
+        };
+
+        return Object.entries(evaluation.criteria)
+            .filter(([_, score]) => score > 0)
+            .map(([key, score]) => ({
+                key,
+                label: criteriaLabels[key as keyof typeof criteriaLabels] || key,
+                score
+            }));
+    }
+
+    retryEvaluation() {
+        if (this.retryCount() < 3) { // Allow up to 3 retries
+            this.errorMessage.set('');
+            this.evaluateAnswer();
+        } else {
+            this.errorMessage.set('Maximum retry attempts reached. Please check your configuration and try again later.');
+        }
+    }
+
+    refreshService() {
+        this.errorMessage.set('');
+        this.retryCount.set(0);
+        this.checkServiceHealth();
+    }
+
+    isDesktopMode(): boolean {
+        return !!(window.electronAPI || (window as any).electron);
+    }
+
+    canRetry(): boolean {
+        return this.retryCount() > 0 && this.retryCount() < 3 && !this.isEvaluating();
+    }
+
+    getScoreSeverity(score: number): string {
+        if (score >= 85) return 'success';
+        if (score >= 70) return 'info'; 
+        if (score >= 60) return 'warn';
+        return 'danger';
+    }
+
+    getRecommendationSeverity(recommendation: string): string {
+        switch (recommendation) {
+            case 'PASS': return 'success';
+            case 'CONDITIONAL': return 'warn';
+            case 'FAIL': return 'danger';
+            default: return 'info';
+        }
+    }
 }

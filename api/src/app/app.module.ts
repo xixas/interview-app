@@ -6,8 +6,11 @@ import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { QuestionsModule } from './questions/questions.module';
+import { InterviewHistoryModule } from './interview-history/interview-history.module';
 import { Tech } from './entities/tech.entity';
 import { Question } from './entities/question.entity';
+import { InterviewSession } from './entities/interview-session.entity';
+import { InterviewResponse } from './entities/interview-response.entity';
 
 @Module({
   imports: [
@@ -20,13 +23,14 @@ import { Question } from './entities/question.entity';
       useFactory: (configService: ConfigService) => ({
         type: 'sqlite',
         database: getDatabasePath(),
-        entities: [Tech, Question],
+        entities: [Tech, Question, InterviewSession, InterviewResponse],
         synchronize: false, // Don't sync, use existing database
         logging: process.env.NODE_ENV === 'development',
       }),
       inject: [ConfigService],
     }),
     QuestionsModule,
+    InterviewHistoryModule,
   ],
   controllers: [AppController],
   providers: [AppService],
@@ -34,6 +38,7 @@ import { Question } from './entities/question.entity';
 export class AppModule {}
 
 function getDatabasePath(): string {
+  console.log(join(__dirname, 'assets', 'mock-interview-backup-2025-08-08.db'))
   // In production, look for database in the app's assets directory
   if (process.env.NODE_ENV === 'production') {
     return join(__dirname, '..', 'assets', 'mock-interview-backup-2025-08-08.db');

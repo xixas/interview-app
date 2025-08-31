@@ -1,26 +1,21 @@
 <div class="app-layout">
-  <!-- Top Toolbar -->
-  <p-toolbar class="app-toolbar">
-    <div class="toolbar-left">
-      <p-button 
-        icon="pi pi-bars" 
-        [text]="true" 
-        [rounded]="true"
-        (onClick)="toggleSidebar()"
-        class="toolbar-menu-button">
-      </p-button>
-      <span class="toolbar-title">{{ title }}</span>
+  <!-- Top Toolbar - Following Sakai NG layout-topbar pattern -->
+  <div class="layout-topbar">
+    <div class="layout-topbar-logo-container">
+      <button class="layout-menu-button layout-topbar-action" (click)="toggleSidebar()">
+        <i class="pi pi-bars"></i>
+      </button>
+      <span class="layout-topbar-title">{{ title }}</span>
     </div>
-    <div class="toolbar-right">
-      <p-button 
-        [icon]="layoutService.isDarkTheme() ? 'pi pi-sun' : 'pi pi-moon'"
-        [text]="true"
-        [rounded]="true"
-        (onClick)="toggleDarkMode()"
-        [pTooltip]="layoutService.isDarkTheme() ? 'Light Mode' : 'Dark Mode'">
-      </p-button>
+
+    <div class="layout-topbar-actions">
+      <div class="layout-config-menu">
+        <button type="button" class="layout-topbar-action" (click)="toggleDarkMode()">
+          <i [ngClass]="{ 'pi': true, 'pi-moon': !layoutService.isDarkTheme(), 'pi-sun': layoutService.isDarkTheme() }"></i>
+        </button>
+      </div>
     </div>
-  </p-toolbar>
+  </div>
 
   <!-- Drawer Navigation -->
   <p-drawer 

@@ -1,0 +1,103 @@
+<div class="app-layout" [class.sidebar-collapsed]="layoutService.config().sidebarCollapsed">
+    <!-- Top Toolbar - Compact Desktop Style -->
+    <div class="app-toolbar">
+        <div class="toolbar-start">
+            <!-- App Icon/Logo -->
+            <div class="app-logo">
+                <i class="pi pi-microphone text-primary text-2xl"></i>
+            </div>
+            
+            <!-- Quick Actions -->
+            <button 
+                pButton 
+                type="button" 
+                icon="pi pi-bars" 
+                class="p-button-text p-button-plain toolbar-button"
+                (click)="layoutService.toggleSidebar()"
+                pTooltip="Toggle Sidebar"
+                tooltipPosition="bottom">
+            </button>
+        </div>
+
+        <div class="toolbar-center">
+            <span class="toolbar-title text-surface-900 dark:text-surface-0">
+                Interview Practice Assistant
+            </span>
+        </div>
+
+        <div class="toolbar-end">
+            <!-- User Avatar -->
+            <p-avatar 
+                label="U" 
+                styleClass="cursor-pointer"
+                [style]="{'background-color':'var(--primary-color)', 'color': 'var(--primary-color-text)'}"
+                shape="circle">
+            </p-avatar>
+        </div>
+    </div>
+
+    <!-- Main Content Area with Sidebar -->
+    <div class="app-body">
+        <!-- Sidebar Navigation -->
+        <div class="app-sidebar">
+            <nav class="sidebar-nav">
+                @for (view of layoutService.views; track view.id) {
+                    <div 
+                        class="nav-item"
+                        [class.active]="layoutService.activeView() === view.id"
+                        (click)="layoutService.setActiveView(view.id)"
+                        [pTooltip]="layoutService.config().sidebarCollapsed ? view.label : ''"
+                        tooltipPosition="right">
+                        
+                        <i [class]="view.icon + ' nav-icon'"></i>
+                        
+                        @if (!layoutService.config().sidebarCollapsed) {
+                            <span class="nav-label">{{ view.label }}</span>
+                            
+                            @if (view.badge && view.badge > 0) {
+                                <span class="nav-badge">{{ view.badge }}</span>
+                            }
+                        }
+                    </div>
+                }
+            </nav>
+
+            @if (!layoutService.config().sidebarCollapsed) {
+                <div class="sidebar-footer">
+                    <div class="text-muted-color text-xs px-3 py-2">
+                        v1.0.0
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Main Content -->
+        <main class="app-content">
+            <router-outlet></router-outlet>
+        </main>
+    </div>
+
+    <!-- Status Bar (Desktop-like) -->
+    @if (layoutService.config().showStatusBar) {
+        <div class="app-statusbar">
+            <div class="statusbar-start">
+                <span class="text-muted-color text-xs">
+                    Interview Practice Assistant v1.0
+                </span>
+            </div>
+            
+            <div class="statusbar-center">
+                <span class="text-muted-color text-xs">
+                    {{ currentTime }}
+                </span>
+            </div>
+            
+            <div class="statusbar-end">
+                <span class="text-muted-color text-xs mr-3">
+                    <i class="pi pi-check-circle text-green-500 mr-1"></i>
+                    Ready
+                </span>
+            </div>
+        </div>
+    }
+</div>

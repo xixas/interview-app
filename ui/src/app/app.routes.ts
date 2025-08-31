@@ -22,6 +22,21 @@ export const appRoutes: Route[] = [
     title: 'AI Evaluator - Interview App'
   },
   {
+    path: 'progress',
+    loadComponent: () => import('./features/progress/progress.component').then(m => m.ProgressComponent),
+    title: 'Progress Analytics - Interview App'
+  },
+  {
+    path: 'spaced-repetition',
+    loadComponent: () => import('./features/spaced-repetition/spaced-repetition.component').then(m => m.SpacedRepetitionComponent),
+    title: 'Spaced Repetition - Interview App'
+  },
+  {
+    path: 'settings',
+    loadComponent: () => import('./features/settings/settings.component').then(m => m.SettingsComponent),
+    title: 'Settings - Interview App'
+  },
+  {
     path: '**',
     redirectTo: '/dashboard'
   }

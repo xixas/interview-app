@@ -10,148 +10,146 @@ import { QuestionDifficulty } from '@interview-app/shared-interfaces';
 export class QuestionsService {
   constructor(
     @InjectRepository(Question)
-    private questionRepository: Repository<Question>,
+    private readonly questionRepository: Repository<Question>,
     @InjectRepository(Tech)
-    private techRepository: Repository<Tech>,
+    private readonly techRepository: Repository<Tech>,
   ) {}
 
+  // ---------- 1) Tech stats via one SQL, no full object graph ----------
   async getTechnologies(): Promise<TechnologyStatsDto[]> {
-    const technologies = await this.techRepository
-      .createQueryBuilder('tech')
-      .leftJoinAndSelect('tech.questions', 'question')
-      .getMany();
+    // Ensure Tech entity has @Entity('tech') and relation Question.tech -> Tech
+    const rows = await this.techRepository
+      .createQueryBuilder('t')
+      .leftJoin('t.questions', 'q')
+      .select('t.name', 'name')
+      .addSelect('COUNT(q.id)', 'total')
+      .addSelect(`SUM(CASE WHEN q.difficulty = :f THEN 1 ELSE 0 END)`, 'fundamental')
+      .addSelect(`SUM(CASE WHEN q.difficulty = :a THEN 1 ELSE 0 END)`, 'advanced')
+      .addSelect(`SUM(CASE WHEN q.difficulty = :e THEN 1 ELSE 0 END)`, 'extensive')
+      .setParameters({
+        f: QuestionDifficulty.FUNDAMENTAL,
+        a: QuestionDifficulty.ADVANCED,
+        e: QuestionDifficulty.EXTENSIVE,
+      })
+      .groupBy('t.id')
+      .orderBy('t.name', 'ASC')
+      .getRawMany<{
+        name: string;
+        total: string;
+        fundamental: string;
+        advanced: string;
+        extensive: string;
+      }>();
 
-    return technologies.map(tech => {
-      const fundamental = tech.questions.filter(q => q.difficulty === QuestionDifficulty.FUNDAMENTAL).length;
-      const advanced = tech.questions.filter(q => q.difficulty === QuestionDifficulty.ADVANCED).length;
-      const extensive = tech.questions.filter(q => q.difficulty === QuestionDifficulty.EXTENSIVE).length;
-
-      return {
-        name: tech.name,
-        totalQuestions: tech.questions.length,
-        fundamental,
-        advanced,
-        extensive
-      };
-    });
+    return rows.map(r => ({
+      name: r.name,
+      totalQuestions: Number(r.total) || 0,
+      fundamental: Number(r.fundamental) || 0,
+      advanced: Number(r.advanced) || 0,
+      extensive: Number(r.extensive) || 0,
+    }));
   }
 
+  // ---------- 2) List with filters + portable pagination ----------
   async getQuestions(dto: GetQuestionsDto): Promise<Question[]> {
-    let query = this.questionRepository
-      .createQueryBuilder('question')
-      .leftJoinAndSelect('question.tech', 'tech');
+    const qb = this.questionRepository
+      .createQueryBuilder('q')
+      .leftJoinAndSelect('q.tech', 't');
 
     if (dto.technology) {
-      query = query.where('tech.name = :technology', { technology: dto.technology });
+      qb.andWhere('t.name = :technology', { technology: dto.technology });
     }
 
     if (dto.difficulty) {
-      const whereClause = dto.technology ? 'question.difficulty = :difficulty' : 'question.difficulty = :difficulty';
-      query = query.andWhere(whereClause, { difficulty: dto.difficulty });
+      qb.andWhere('q.difficulty = :difficulty', { difficulty: dto.difficulty });
     }
 
-    if (dto.limit) {
-      query = query.limit(dto.limit);
-    }
+    if (dto.limit) qb.take(dto.limit);
+    if (dto.offset) qb.skip(dto.offset);
 
-    if (dto.offset) {
-      query = query.offset(dto.offset);
-    }
-
-    return query.getMany();
+    return qb.getMany();
   }
 
+  // ---------- 3) Random sample (SQLite RANDOM()) ----------
   async getRandomQuestions(dto: GetRandomQuestionsDto): Promise<Question[]> {
-    let query = this.questionRepository
-      .createQueryBuilder('question')
-      .leftJoinAndSelect('question.tech', 'tech');
+    console.log({dto})
+    const count = dto.count && dto.count > 0 ? dto.count : 10;
+
+    const qb = this.questionRepository
+      .createQueryBuilder('q')
+      .leftJoinAndSelect('q.tech', 't');
 
     if (dto.technology) {
-      query = query.where('tech.name = :technology', { technology: dto.technology });
+      qb.andWhere('t.name = :technology', { technology: dto.technology });
     }
 
+    // Accept dto.difficulty as enum or 'ALL'
     if (dto.difficulty && dto.difficulty !== 'ALL') {
-      const whereClause = dto.technology ? 'question.difficulty = :difficulty' : 'question.difficulty = :difficulty';
-      query = query.andWhere(whereClause, { difficulty: dto.difficulty });
+      qb.andWhere('q.difficulty = :difficulty', { difficulty: dto.difficulty });
     }
 
-    // Use RANDOM() for SQLite
-    query = query.orderBy('RANDOM()').limit(dto.count || 10);
-
-    return query.getMany();
+    return qb.orderBy('RANDOM()').take(count).getMany();
   }
 
+  // ---------- 4) By id ----------
   async getQuestionById(id: number): Promise<Question> {
     const question = await this.questionRepository
-      .createQueryBuilder('question')
-      .leftJoinAndSelect('question.tech', 'tech')
-      .where('question.id = :id', { id })
+      .createQueryBuilder('q')
+      .leftJoinAndSelect('q.tech', 't')
+      .where('q.id = :id', { id })
       .getOne();
 
-    if (!question) {
-      throw new NotFoundException(`Question with ID ${id} not found`);
-    }
-
+    if (!question) throw new NotFoundException(`Question with ID ${id} not found`);
     return question;
   }
 
+  // ---------- 5) By technology ----------
   async getQuestionsByTechnology(technology: string): Promise<Question[]> {
-    const questions = await this.questionRepository
-      .createQueryBuilder('question')
-      .leftJoinAndSelect('question.tech', 'tech')
-      .where('tech.name = :technology', { technology })
+    return this.questionRepository
+      .createQueryBuilder('q')
+      .leftJoinAndSelect('q.tech', 't')
+      .where('t.name = :technology', { technology })
+      .orderBy('q.id', 'ASC')
       .getMany();
-
-    return questions;
   }
 
+  // ---------- 6) Search ----------
   async searchQuestions(searchTerm: string, dto: GetQuestionsDto): Promise<Question[]> {
-    let query = this.questionRepository
-      .createQueryBuilder('question')
-      .leftJoinAndSelect('question.tech', 'tech')
-      .where('question.question LIKE :search OR question.answer LIKE :search', {
-        search: `%${searchTerm}%`
-      });
+    const qb = this.questionRepository
+      .createQueryBuilder('q')
+      .leftJoinAndSelect('q.tech', 't')
+      .where('(q.question LIKE :search OR q.answer LIKE :search)', { search: `%${searchTerm}%` });
 
-    if (dto.technology) {
-      query = query.andWhere('tech.name = :technology', { technology: dto.technology });
-    }
+    if (dto.technology) qb.andWhere('t.name = :technology', { technology: dto.technology });
+    if (dto.difficulty) qb.andWhere('q.difficulty = :difficulty', { difficulty: dto.difficulty });
+    if (dto.limit) qb.take(dto.limit);
+    if (dto.offset) qb.skip(dto.offset);
 
-    if (dto.difficulty) {
-      query = query.andWhere('question.difficulty = :difficulty', { difficulty: dto.difficulty });
-    }
-
-    if (dto.limit) {
-      query = query.limit(dto.limit);
-    }
-
-    return query.getMany();
+    return qb.getMany();
   }
 
+  // ---------- 7) DB stats ----------
   async getDatabaseStats(): Promise<{
     totalQuestions: number;
     totalTechnologies: number;
     questionsByDifficulty: Record<QuestionDifficulty, number>;
   }> {
-    const totalQuestions = await this.questionRepository.count();
-    const totalTechnologies = await this.techRepository.count();
-
-    const questionsByDifficulty = {
-      [QuestionDifficulty.FUNDAMENTAL]: await this.questionRepository.count({
-        where: { difficulty: QuestionDifficulty.FUNDAMENTAL }
-      }),
-      [QuestionDifficulty.ADVANCED]: await this.questionRepository.count({
-        where: { difficulty: QuestionDifficulty.ADVANCED }
-      }),
-      [QuestionDifficulty.EXTENSIVE]: await this.questionRepository.count({
-        where: { difficulty: QuestionDifficulty.EXTENSIVE }
-      })
-    };
+    const [totalQuestions, totalTechnologies, f, a, e] = await Promise.all([
+      this.questionRepository.count(),
+      this.techRepository.count(),
+      this.questionRepository.count({ where: { difficulty: QuestionDifficulty.FUNDAMENTAL } }),
+      this.questionRepository.count({ where: { difficulty: QuestionDifficulty.ADVANCED } }),
+      this.questionRepository.count({ where: { difficulty: QuestionDifficulty.EXTENSIVE } }),
+    ]);
 
     return {
       totalQuestions,
       totalTechnologies,
-      questionsByDifficulty
+      questionsByDifficulty: {
+        [QuestionDifficulty.FUNDAMENTAL]: f,
+        [QuestionDifficulty.ADVANCED]: a,
+        [QuestionDifficulty.EXTENSIVE]: e,
+      },
     };
   }
 }

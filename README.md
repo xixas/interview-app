@@ -11,6 +11,7 @@ A comprehensive mock interview desktop application built with modern web technol
 - **Technology Focus**: Multiple programming languages and frameworks
 - **Progress Tracking**: Comprehensive analytics and performance metrics
 - **Dark/Light Theme**: Modern UI with PrimeNG components
+- **Comprehensive Testing**: Full E2E test coverage with Playwright
 
 ## 🏗️ Architecture
 
@@ -29,7 +30,7 @@ This is an **Nx monorepo** containing multiple applications:
 - **Desktop**: Electron, IPC Communication
 - **AI**: OpenAI API for evaluation
 - **Build**: Nx, Webpack, electron-builder
-- **Testing**: Jest, ESLint
+- **Testing**: Jest, Playwright E2E, ESLint
 
 ## 🏃‍♂️ Quick Start
 
@@ -93,8 +94,15 @@ npm run nxe:serve:backend
 - `npm run build:evaluator` - Build evaluator service
 
 ### Testing
-- `npm run test` - Run all tests
+- `npm run test` - Run all unit tests
+- `npm run test:e2e` - Run Electron E2E tests
+- `npm run test:e2e:web` - Run web E2E tests  
+- `npm run test:e2e:headed` - Run E2E tests with visible app
+- `npm run test:e2e:debug` - Debug E2E tests step-by-step
+- `npm run test:e2e:ui` - Open Playwright test UI
 - `npm run lint` - Run linting
+
+See [PLAYWRIGHT_TESTING_GUIDE.md](./PLAYWRIGHT_TESTING_GUIDE.md) for comprehensive testing documentation.
 
 ### Packaging
 - `npm run nxe:package:app` - Package desktop app

@@ -1,6 +1,6 @@
-import { Controller, Post, Body, Get, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseInterceptors, UploadedFile, BadRequestException, Headers } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiConsumes } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiConsumes, ApiHeader } from '@nestjs/swagger';
 import { Express } from 'express';
 import { memoryStorage } from 'multer';
 import { EvaluatorService } from './evaluator.service';
@@ -26,6 +26,11 @@ export class EvaluatorController {
   @ApiOperation({ 
     summary: 'Evaluate interview answer',
     description: 'Analyzes an interview answer and provides detailed feedback with scoring'
+  })
+  @ApiHeader({
+    name: 'X-OpenAI-API-Key',
+    description: 'OpenAI API key for evaluation',
+    required: true,
   })
   @ApiBody({ type: EvaluateAnswerDto })
   @ApiResponse({
@@ -75,12 +80,16 @@ export class EvaluatorController {
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  @ApiResponse({ status: 400, description: 'Invalid input data or missing API key' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
   async evaluateAnswer(
     @Body() evaluateAnswerDto: EvaluateAnswerDto,
+    @Headers('x-openai-api-key') apiKey?: string,
   ): Promise<EvaluationResult> {
-    return this.evaluatorService.evaluateAnswer(evaluateAnswerDto);
+    if (!apiKey) {
+      throw new BadRequestException('OpenAI API key is required. Please provide X-OpenAI-API-Key header.');
+    }
+    return this.evaluatorService.evaluateAnswer(evaluateAnswerDto, apiKey);
   }
 
   @Post('evaluate-audio')
@@ -137,6 +146,48 @@ export class EvaluatorController {
       availableRoles: ['frontend', 'backend', 'fullstack', 'devops', 'mobile', 'data-science', 'qa'],
       availableProficiencyLevels: ['junior', 'mid', 'senior', 'lead'],
       questionTypes: ['technical', 'behavioral', 'system-design', 'coding'],
+    };
+  }
+
+  @Get('validate-key')
+  @ApiOperation({ 
+    summary: 'Validate API key format',
+    description: 'Simple validation of OpenAI API key format without making API calls'
+  })
+  @ApiHeader({
+    name: 'X-OpenAI-API-Key',
+    description: 'OpenAI API key to validate',
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'API key validation result',
+    schema: {
+      type: 'object',
+      properties: {
+        valid: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'API key format is valid' },
+        keyPreview: { type: 'string', example: 'sk-proj-...' }
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Missing or invalid API key' })
+  validateApiKey(
+    @Headers('x-openai-api-key') apiKey?: string,
+  ): any {
+    if (!apiKey || !apiKey.trim()) {
+      throw new BadRequestException('OpenAI API key is required. Please provide X-OpenAI-API-Key header.');
+    }
+
+    const trimmedKey = apiKey.trim();
+    const isValidFormat = trimmedKey.startsWith('sk-') && trimmedKey.length > 20;
+    
+    return {
+      valid: isValidFormat,
+      message: isValidFormat 
+        ? 'API key format is valid' 
+        : 'Invalid API key format. OpenAI API keys should start with "sk-"',
+      keyPreview: `${trimmedKey.substring(0, 7)}...${trimmedKey.slice(-4)}`
     };
   }
 

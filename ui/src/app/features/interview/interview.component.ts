@@ -1,7 +1,28 @@
+type UIDifficulty = 'easy' | 'medium' | 'hard' | 'mixed';
+
+const UI_TO_DB: Record<Exclude<UIDifficulty, 'mixed'>, 'Fundamental'|'Advanced'|'Extensive'> = {
+  easy: 'Fundamental',
+  medium: 'Advanced',
+  hard: 'Extensive',
+};
+
+const DB_TO_UI: Record<'Fundamental'|'Advanced'|'Extensive', Exclude<UIDifficulty,'mixed'>> = {
+  Fundamental: 'easy',
+  Advanced: 'medium',
+  Extensive: 'hard',
+};
+
+function toApiDifficulty(d: UIDifficulty): 'Fundamental'|'Advanced'|'Extensive'|'ALL' {
+  return d === 'mixed' ? 'ALL' : UI_TO_DB[d];
+}
+
+function toUiDifficulty(d: string): Exclude<UIDifficulty,'mixed'> {
+  return DB_TO_UI[d as keyof typeof DB_TO_UI] ?? 'medium';
+}
+
 import { Component, OnInit, OnDestroy, signal, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { CardModule } from 'primeng/card';
 import { ButtonModule } from 'primeng/button';
@@ -14,10 +35,12 @@ import { DialogModule } from 'primeng/dialog';
 import { MessageModule } from 'primeng/message';
 import { TagModule } from 'primeng/tag';
 import { PanelModule } from 'primeng/panel';
-import { firstValueFrom } from 'rxjs';
+import { FluidModule } from 'primeng/fluid';
 import { ProficiencyLevel, Role, QuestionDifficulty } from '@interview-app/shared-interfaces';
 import { EnvironmentService } from '../../core/services/environment.service';
 import { ElectronService } from '../../core/services/electron.service';
+import { DatabaseIpcService } from '../../core/services/database-ipc.service';
+import { EvaluatorIpcService } from '../../core/services/evaluator-ipc.service';
 
 interface InterviewSettings {
   category: string;
@@ -42,6 +65,7 @@ interface Question {
   category: string;
   difficulty: string;
   type: string;
+  example?: string;
 }
 
 interface InterviewSession {
@@ -116,20 +140,23 @@ interface InterviewResult {
     DialogModule,
     MessageModule,
     TagModule,
-    PanelModule
+    PanelModule,
+    FluidModule
   ],
   templateUrl: './interview.component.html',
   styleUrl: './interview.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class InterviewComponent implements OnInit, OnDestroy {
-  private http = inject(HttpClient);
   private router = inject(Router);
   protected env = inject(EnvironmentService);
   private electron = inject(ElectronService);
+  private databaseService = inject(DatabaseIpcService);
+  private evaluatorService = inject(EvaluatorIpcService);
   
-  // Make Math available in template
+  // Make Math and Array available in template
   protected readonly Math = Math;
+  protected readonly Array = Array;
 
   // Signals for reactive state management
   currentStep = signal<'setup' | 'interview' | 'results'>('setup');
@@ -137,7 +164,7 @@ export class InterviewComponent implements OnInit, OnDestroy {
   errorMessage = signal('');
   technologies = signal<TechnologyStats[]>([]);
   
-  settings = signal<InterviewSettings>({
+  settings = signal<InterviewSettings & { difficulty: UIDifficulty }>({
     category: '',
     difficulty: 'medium',
     numberOfQuestions: 10,
@@ -145,6 +172,7 @@ export class InterviewComponent implements OnInit, OnDestroy {
     recordAudio: this.env.isFeatureEnabled('audioRecording'),
     enableAIAnalysis: this.env.isFeatureEnabled('aiAnalysis')
   });
+
 
   // Interview session state
   currentSession = signal<InterviewSession | null>(null);
@@ -157,6 +185,13 @@ export class InterviewComponent implements OnInit, OnDestroy {
   sessionResult = signal<InterviewResult | null>(null);
 
   // Dialog state
+  // New recording-related signals
+  answerMode = signal<'text' | 'audio'>('text');
+  recordingTime = signal(0);
+  recordingDuration = signal(0);
+  transcription = signal<string | null>(null);
+  isTranscribing = signal(false);
+  isPlaying = signal(false);
   showEndDialog = signal(false);
 
   // Computed values
@@ -175,9 +210,24 @@ export class InterviewComponent implements OnInit, OnDestroy {
     this.techOptions().find(opt => opt.value === this.settings().category)
   );
 
-  estimatedTime = computed(() => 
-    Math.ceil(this.settings().numberOfQuestions * 3)
-  );
+  estimatedTime = computed(() => {
+    const questions = this.settings().numberOfQuestions;
+    const difficulty = this.settings().difficulty;
+    
+    // Base time per question varies by difficulty
+    let baseTime = 4; // Default 4 minutes per question
+    switch (difficulty) {
+      case 'easy': baseTime = 3; break;
+      case 'medium': baseTime = 4; break;
+      case 'hard': baseTime = 5; break;
+      case 'mixed': baseTime = 4; break;
+    }
+    
+    // Add buffer time for transitions and review
+    const bufferTime = Math.ceil(questions * 0.5); // 30 seconds per question buffer
+    
+    return Math.ceil((questions * baseTime) + bufferTime);
+  });
 
   availableForDifficulty = computed(() => {
     const tech = this.selectedTechInfo();
@@ -229,7 +279,9 @@ export class InterviewComponent implements OnInit, OnDestroy {
   });
 
   canSubmit = computed(() => {
-    return (this.currentAnswer().trim().length > 0 || this.hasRecording()) && !this.isProcessing();
+    const hasTextAnswer = this.answerMode() === 'text' && this.currentAnswer().trim().length > 0;
+    const hasAudioAnswer = this.answerMode() === 'audio' && this.hasRecording();
+    return (hasTextAnswer || hasAudioAnswer) && !this.isProcessing();
   });
 
   hasNext = computed(() => {
@@ -257,7 +309,14 @@ export class InterviewComponent implements OnInit, OnDestroy {
   // Private fields
   private timerInterval: any;
   private recordingTimer: any;
+  private recordingTimeTimer: any;
   private audioRecording: any;
+  // MediaRecorder API fields
+  private mediaRecorder: MediaRecorder | null = null;
+  private audioChunks: Blob[] = [];
+  private audioBlob: Blob | null = null;
+  private audioUrl: string | null = null;
+  private audioElement: HTMLAudioElement | null = null;
 
   async ngOnInit() {
     await this.loadTechnologies();
@@ -271,6 +330,25 @@ export class InterviewComponent implements OnInit, OnDestroy {
     if (this.recordingTimer) {
       clearTimeout(this.recordingTimer);
     }
+    if (this.recordingTimeTimer) {
+      clearInterval(this.recordingTimeTimer);
+    }
+    
+    // Clean up MediaRecorder resources
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      this.mediaRecorder.stop();
+    }
+    
+    // Clean up audio URL
+    if (this.audioUrl) {
+      URL.revokeObjectURL(this.audioUrl);
+    }
+    
+    // Clean up audio element
+    if (this.audioElement) {
+      this.audioElement.pause();
+      this.audioElement = null;
+    }
   }
 
   private async loadTechnologies() {
@@ -278,17 +356,28 @@ export class InterviewComponent implements OnInit, OnDestroy {
       this.isLoading.set(true);
       this.errorMessage.set('');
       
-      const stats = await firstValueFrom(
-        this.http.get<TechnologyStats[]>(this.env.getApiEndpoint('/api/questions/technologies'))
-      );
+      const stats = await this.databaseService.getTechnologies();
       
-      this.technologies.set(stats);
+      // Map to expected interface format with estimated difficulty breakdown
+      const techStats: TechnologyStats[] = stats.map((tech) => {
+        // Use estimated distribution based on typical technical interview question pools
+        const total = tech.totalQuestions;
+        return {
+          name: tech.name,
+          totalQuestions: total,
+          fundamental: Math.floor(total * 0.4), // 40% easy/fundamental
+          advanced: Math.floor(total * 0.4),   // 40% medium/advanced  
+          extensive: Math.floor(total * 0.2)   // 20% hard/extensive
+        };
+      });
+      
+      this.technologies.set(techStats);
       
       // Set the first available technology as default if none selected
-      if (stats.length > 0 && !this.settings().category) {
+      if (techStats.length > 0 && !this.settings().category) {
         this.settings.update(current => ({
           ...current,
-          category: stats[0].name
+          category: techStats[0].name
         }));
       }
     } catch (error) {
@@ -300,50 +389,54 @@ export class InterviewComponent implements OnInit, OnDestroy {
   }
 
   async startInterview() {
-    if (!this.canStartInterview()) {
-      return;
-    }
+  if (!this.canStartInterview()) return;
 
-    try {
-      this.isLoading.set(true);
-      this.errorMessage.set('');
+  try {
+    this.isLoading.set(true);
+    this.errorMessage.set('');
 
-      // Fetch questions for the interview
-      const questions = await firstValueFrom(
-        this.http.post<Question[]>(this.env.getApiEndpoint('/api/questions/interview'), {
-          category: this.settings().category,
-          difficulty: this.settings().difficulty === 'mixed' ? undefined : this.settings().difficulty,
-          count: this.settings().numberOfQuestions
-        })
-      );
+    const s = this.settings();
+    const apiDifficulty = toApiDifficulty(s.difficulty);
 
-      if (!questions || questions.length === 0) {
-        throw new Error('No questions available for the selected criteria');
-      }
+    const dbQuestions = await this.databaseService.getRandomQuestions({
+      technology: s.category,                      // keep as-is
+      difficulty: apiDifficulty,                   // <-- mapped for DB
+      count: s.numberOfQuestions
+    });
 
-      // Create interview session
-      const session: InterviewSession = {
-        id: this.generateId(),
-        title: `${this.settings().category} Interview`,
-        description: `${this.settings().difficulty} level - ${this.settings().numberOfQuestions} questions`,
-        settings: { ...this.settings() },
-        questions,
-        responses: [],
-        startTime: new Date(),
-        currentQuestionIndex: 0
-      };
+    if (!dbQuestions?.length) throw new Error('No questions available for the selected criteria');
 
-      this.currentSession.set(session);
-      this.currentQuestion.set(questions[0]);
-      this.currentStep.set('interview');
-      
-    } catch (error) {
-      console.error('Failed to start interview:', error);
-      this.errorMessage.set('Failed to start interview session. Please try again.');
-    } finally {
-      this.isLoading.set(false);
-    }
+    const questions: Question[] = dbQuestions.map(q => ({
+      id: String(q.id),
+      question: q.question,
+      category: q.category,
+      difficulty: toUiDifficulty(q.difficulty),    // <-- normalize back for UI
+      type: 'technical',
+      example: q.example
+    }));
+
+    const session: InterviewSession = {
+      id: this.generateId(),
+      title: `${s.category} Interview`,
+      description: `${s.difficulty} level - ${s.numberOfQuestions} questions`,
+      settings: { ...s },
+      questions,
+      responses: [],
+      startTime: new Date(),
+      currentQuestionIndex: 0
+    };
+
+    this.currentSession.set(session);
+    this.currentQuestion.set(questions[0]);
+    this.currentStep.set('interview');
+  } catch (error) {
+    console.error('Failed to start interview:', error);
+    this.errorMessage.set('Failed to start interview session. Please try again.');
+  } finally {
+    this.isLoading.set(false);
   }
+}
+
 
   async submitAnswer() {
     if (!this.canSubmit()) {
@@ -365,14 +458,14 @@ export class InterviewComponent implements OnInit, OnDestroy {
         id: this.generateId(),
         questionId: question.id,
         question: question.question,
-        userAnswer: this.currentAnswer() || undefined,
-        transcription: this.audioRecording?.transcription,
-        audioBlob: this.audioRecording?.blob,
-        audioUrl: this.audioRecording?.url,
+        userAnswer: this.answerMode() === 'text' ? this.currentAnswer() || undefined : this.transcription() || undefined,
+        transcription: this.transcription() || undefined,
+        audioBlob: this.audioBlob || undefined,
+        audioUrl: this.audioUrl || undefined,
         skipped: false,
         startTime: new Date(),
         endTime: new Date(),
-        duration: 0 // Would be calculated from start/end times
+        duration: this.answerMode() === 'audio' ? this.recordingDuration() : 0
       };
 
       // Add response to session
@@ -390,10 +483,7 @@ export class InterviewComponent implements OnInit, OnDestroy {
       }
 
       // Clean up form state
-      this.currentAnswer.set('');
-      this.hasRecording.set(false);
-      this.isRecording.set(false);
-      this.audioRecording = null;
+      this.resetAnswerState();
 
       // Move to next question or complete interview
       if (this.hasNext()) {
@@ -412,13 +502,13 @@ export class InterviewComponent implements OnInit, OnDestroy {
 
   private async evaluateAnswer(response: InterviewResponse) {
     try {
-      const evaluation = await firstValueFrom(
-        this.http.post<any>(this.env.getEvaluatorEndpoint('/evaluator/evaluate'), {
-          question: response.question,
-          answer: response.userAnswer || response.transcription || '',
-          audioTranscription: response.transcription
-        })
-      );
+      const evaluation = await this.evaluatorService.evaluateAnswer({
+        questionId: response.questionId,
+        question: response.question,
+        answer: response.userAnswer || response.transcription || '',
+        technology: this.settings().category,
+        difficulty: this.settings().difficulty
+      });
 
       // Update response with AI analysis
       this.currentSession.update(current => {
@@ -429,7 +519,7 @@ export class InterviewComponent implements OnInit, OnDestroy {
             ? {
                 ...r,
                 aiAnalysis: {
-                  score: evaluation.overallScore || 0,
+                  score: evaluation.score || 0,
                   metrics: {
                     technicalAccuracy: evaluation.technicalAccuracy || 0,
                     communication: evaluation.communication || 0,
@@ -537,17 +627,84 @@ export class InterviewComponent implements OnInit, OnDestroy {
     }
   }
 
-  private startRecording() {
-    // Mock implementation - in real app would use MediaRecorder
-    this.isRecording.set(true);
-    this.hasRecording.set(false);
-    this.audioRecording = null;
-
-    this.recordingTimer = setTimeout(() => {
-      if (this.isRecording()) {
-        this.stopRecording();
+  private async startRecording() {
+    if (!this.env.isFeatureEnabled('audioRecording')) {
+      this.errorMessage.set('Audio recording is not available in this environment.');
+      return;
+    }
+    
+    try {
+      // Clear any previous errors
+      this.errorMessage.set('');
+      
+      // Request microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        } 
+      });
+      
+      // Reset previous recording data
+      this.audioChunks = [];
+      this.audioBlob = null;
+      this.audioUrl = null;
+      this.transcription.set(null);
+      
+      // Create MediaRecorder
+      this.mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+      
+      // Handle data available event
+      this.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          this.audioChunks.push(event.data);
+        }
+      };
+      
+      // Handle recording stop event
+      this.mediaRecorder.onstop = () => {
+        this.processRecordedAudio();
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      // Start recording
+      this.mediaRecorder.start();
+      this.isRecording.set(true);
+      this.hasRecording.set(false);
+      this.recordingTime.set(0);
+      
+      // Start recording timer
+      this.recordingTimeTimer = setInterval(() => {
+        this.recordingTime.update(time => time + 1);
+      }, 1000);
+      
+      // Auto-stop after 5 minutes
+      this.recordingTimer = setTimeout(() => {
+        if (this.isRecording()) {
+          this.stopRecording();
+        }
+      }, 300000);
+      
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      this.isRecording.set(false);
+      
+      if (error instanceof Error) {
+        if (error.name === 'NotAllowedError') {
+          this.errorMessage.set('Microphone access denied. Please allow microphone permissions and try again.');
+        } else if (error.name === 'NotFoundError') {
+          this.errorMessage.set('No microphone found. Please connect a microphone and try again.');
+        } else {
+          this.errorMessage.set('Failed to access microphone: ' + error.message);
+        }
+      } else {
+        this.errorMessage.set('Failed to start recording. Please try again.');
       }
-    }, 30000); // Auto-stop after 30 seconds
+    }
   }
 
   private stopRecording() {
@@ -555,16 +712,153 @@ export class InterviewComponent implements OnInit, OnDestroy {
       clearTimeout(this.recordingTimer);
       this.recordingTimer = null;
     }
+    
+    if (this.recordingTimeTimer) {
+      clearInterval(this.recordingTimeTimer);
+      this.recordingTimeTimer = null;
+    }
 
     this.isRecording.set(false);
+    
+    // Stop MediaRecorder if active
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      this.mediaRecorder.stop();
+    }
+  }
+
+  private processRecordedAudio() {
+    if (this.audioChunks.length === 0) {
+      console.warn('No audio chunks to process');
+      return;
+    }
+    
+    // Create blob from audio chunks
+    this.audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+    this.audioUrl = URL.createObjectURL(this.audioBlob);
+    
+    // Set recording duration
+    this.recordingDuration.set(this.recordingTime());
+    
+    // Mark as having recording
     this.hasRecording.set(true);
     
-    // Mock recording data
-    this.audioRecording = {
-      blob: new Blob(['mock-audio-data'], { type: 'audio/wav' }),
-      url: 'mock-audio-url',
-      transcription: 'This is a mock transcription of the recorded audio response.'
-    };
+    // Create audio element for playback
+    this.audioElement = new Audio(this.audioUrl);
+    this.audioElement.addEventListener('ended', () => {
+      this.isPlaying.set(false);
+    });
+    
+    // Start transcription if enabled
+    if (this.currentSession()?.settings?.enableAIAnalysis) {
+      this.transcribeAudio();
+    }
+  }
+
+  private async transcribeAudio() {
+    if (!this.audioBlob) {
+      console.warn('No audio blob to transcribe');
+      return;
+    }
+    
+    try {
+      this.isTranscribing.set(true);
+      
+      // Convert blob to base64 for API
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Audio = reader.result as string;
+        
+        try {
+          // Call transcription service
+          const result = await this.evaluatorService.transcribeAudio(base64Audio);
+          
+          if (result.text && result.text.trim()) {
+            this.transcription.set(result.text.trim());
+          } else {
+            console.warn('Transcription returned empty text');
+            this.transcription.set('(No speech detected in recording)');
+          }
+        } catch (error) {
+          console.error('Transcription error:', error);
+          this.transcription.set('(Transcription failed - please check your API key configuration)');
+        } finally {
+          this.isTranscribing.set(false);
+        }
+      };
+      
+      reader.onerror = () => {
+        console.error('Failed to read audio file');
+        this.transcription.set('(Failed to process audio)');
+        this.isTranscribing.set(false);
+      };
+      
+      reader.readAsDataURL(this.audioBlob);
+    } catch (error) {
+      console.error('Failed to start transcription:', error);
+      this.transcription.set('(Transcription unavailable)');
+      this.isTranscribing.set(false);
+    }
+  }
+
+  private resetAnswerState() {
+    // Reset text answer
+    this.currentAnswer.set('');
+    
+    // Reset audio recording state
+    this.isRecording.set(false);
+    this.hasRecording.set(false);
+    this.recordingTime.set(0);
+    this.recordingDuration.set(0);
+    this.transcription.set(null);
+    this.isTranscribing.set(false);
+    this.isPlaying.set(false);
+    
+    // Clean up MediaRecorder
+    if (this.mediaRecorder) {
+      if (this.mediaRecorder.state === 'recording') {
+        this.mediaRecorder.stop();
+      }
+      this.mediaRecorder = null;
+    }
+    
+    // Clean up audio resources
+    if (this.audioUrl) {
+      URL.revokeObjectURL(this.audioUrl);
+      this.audioUrl = null;
+    }
+    
+    if (this.audioElement) {
+      this.audioElement.pause();
+      this.audioElement = null;
+    }
+    
+    this.audioBlob = null;
+    this.audioChunks = [];
+    this.audioRecording = null;
+    
+    // Reset to text mode
+    this.answerMode.set('text');
+  }
+
+  togglePlayback() {
+    if (!this.audioElement) {
+      console.warn('No audio element available');
+      return;
+    }
+    
+    if (this.isPlaying()) {
+      this.audioElement.pause();
+      this.audioElement.currentTime = 0;
+      this.isPlaying.set(false);
+    } else {
+      // Add error handling for playback
+      this.audioElement.play().catch(error => {
+        console.error('Audio playback failed:', error);
+        this.isPlaying.set(false);
+        this.errorMessage.set('Failed to play audio recording.');
+      });
+      this.isPlaying.set(true);
+    }
   }
 
   endInterview() {
@@ -712,6 +1006,25 @@ export class InterviewComponent implements OnInit, OnDestroy {
 
   onRecordAudioChange(value: boolean) {
     this.settings.update(current => ({ ...current, recordAudio: value }));
+  }
+
+  // Utility methods
+  formatMarkdown(markdown: string): string {
+    // Basic markdown to HTML conversion
+    return markdown
+      .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/### ([^\n]+)/g, '<h3>$1</h3>')
+      .replace(/## ([^\n]+)/g, '<h2>$1</h2>')
+      .replace(/# ([^\n]+)/g, '<h1>$1</h1>')
+      .replace(/\n\n/g, '<br><br>')
+      .replace(/\|([^|]+)\|/g, (match, content) => {
+        // Simple table row conversion
+        const cells = content.split('|').map((cell: string) => `<td>${cell.trim()}</td>`).join('');
+        return `<tr>${cells}</tr>`;
+      });
   }
 
   // Navigation methods

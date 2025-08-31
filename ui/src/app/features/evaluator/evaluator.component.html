@@ -1,455 +1,383 @@
-<div class="evaluator-container">
-  <!-- Header -->
-  <div class="evaluator-header mb-4">
-    <h1 class="text-2xl font-bold m-0">🤖 AI Evaluator</h1>
-    <p class="text-color-secondary mt-2">Test the AI-powered interview answer evaluation system with voice recording</p>
+<div class="page-container">
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="flex justify-between items-center">
+      <div>
+        <h1>AI Evaluator</h1>
+        <p>Get AI-powered feedback on your interview responses</p>
+      </div>
+      <div class="page-actions">
+        <button 
+          pButton
+          label="Load Sample" 
+          icon="pi pi-file"
+          severity="secondary"
+          outlined
+          (onClick)="loadSampleData()">
+        </button>
+        <button 
+          pButton
+          icon="pi pi-refresh"
+          severity="secondary" 
+          outlined
+          pTooltip="Reset Form"
+          (onClick)="resetForm()">
+        </button>
+      </div>
+    </div>
   </div>
 
-  <div class="grid grid-cols-12 gap-4">
-    <!-- Input Form -->
-    <div class="col-span-12 xl:col-span-6">
-      <div class="flex flex-column gap-4">
-        <!-- Test Input Card -->
-        <p-card header="📝 Test Input">
-          <form [formGroup]="evaluationForm" class="flex flex-column gap-4">
-            <!-- Question Input -->
+  <!-- Service Status Messages -->
+  @if (serviceStatus() === 'checking') {
+    <div class="mb-6">
+      <p-message 
+        severity="info" 
+        class="w-full">
+        <div class="flex items-center gap-2">
+          <i class="pi pi-spin pi-spinner"></i>
+          Checking AI evaluation service status...
+        </div>
+      </p-message>
+    </div>
+  } @else if (serviceStatus() === 'unavailable') {
+    <div class="mb-6">
+      <p-message 
+        severity="warn" 
+        class="w-full">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="pi pi-exclamation-triangle"></i>
+            AI Evaluator service is unavailable. Please check your configuration.
+          </div>
+          <p-button 
+            label="Retry" 
+            icon="pi pi-refresh"
+            size="small"
+            severity="secondary"
+            outlined
+            (onClick)="refreshService()">
+          </p-button>
+        </div>
+      </p-message>
+    </div>
+  } @else if (!isDesktopMode()) {
+    <div class="mb-6">
+      <p-message 
+        severity="info" 
+        class="w-full">
+        <div class="flex items-center gap-2">
+          <i class="pi pi-info-circle"></i>
+          For full AI evaluation features, please use the desktop version of the app.
+        </div>
+      </p-message>
+    </div>
+  }
+
+  <div class="grid grid-cols-12 gap-8">
+    <!-- Interview Configuration Card -->
+    <div class="col-span-12">
+      <div class="card mb-0">
+        <div class="card-header">
+          <h3 class="text-surface-900 dark:text-surface-0 font-medium mb-4">Interview Configuration</h3>
+          <p>Configure the interview context for accurate AI evaluation</p>
+        </div>
+        
+        <div class="form-section">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="form-group">
+              <label for="role" class="text-surface-900 dark:text-surface-0 font-medium mb-2 block">Role <span class="required">*</span></label>
+              <p-select 
+                id="role"
+                [(ngModel)]="selectedRole"
+                [options]="roleOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Select role"
+                class="w-full">
+              </p-select>
+            </div>
+            
+            <div class="form-group">
+              <label for="level" class="text-surface-900 dark:text-surface-0 font-medium mb-2 block">Experience Level <span class="required">*</span></label>
+              <p-select 
+                id="level"
+                [(ngModel)]="selectedLevel"
+                [options]="levelOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Select level"
+                class="w-full">
+              </p-select>
+            </div>
+            
+            <div class="form-group">
+              <label for="type" class="text-surface-900 dark:text-surface-0 font-medium mb-2 block">Question Type</label>
+              <p-select 
+                id="type"
+                [(ngModel)]="selectedType"
+                [options]="typeOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Select type"
+                class="w-full">
+              </p-select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="flex justify-end">
+              <p-button 
+                label="Generate New Question"
+                icon="pi pi-refresh"
+                severity="secondary"
+                outlined
+                (onClick)="generateNewQuestion()">
+              </p-button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Response Input Card -->
+    <div class="col-span-12 lg:col-span-6">
+      <div class="card mb-0">
+        <div class="card-header">
+          <h3 class="text-surface-900 dark:text-surface-0 font-medium mb-4">Your Response</h3>
+          <p>Provide your detailed answer to the interview question</p>
+        </div>
+        
+        <div class="form-section">
+          <div class="form-group">
+            <label for="question" class="text-surface-900 dark:text-surface-0 font-medium mb-2 block">Interview Question:</label>
+            <div class="p-3 surface-100 border-round text-sm leading-6 border border-surface-200">
+              {{ currentQuestion() }}
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="answer" class="text-surface-900 dark:text-surface-0 font-medium mb-2 block">Your Answer <span class="required">*</span></label>
+            <textarea 
+              pTextarea 
+              id="answer"
+              [(ngModel)]="answer"
+              placeholder="Type your detailed answer here... Include examples, explanations, and reasoning."
+              rows="8"
+              class="w-full"
+              [style]="{'resize': 'vertical'}">
+            </textarea>
+            <small>
+              Characters: {{ answer.length }} | Words: {{ getWordCount(answer) }}
+            </small>
+          </div>
+
+          @if (errorMessage()) {
+            <div class="form-group">
+              <p-message 
+                severity="error">
+                <div class="flex items-center justify-between">
+                  <div class="flex-1">
+                    {{ errorMessage() }}
+                  </div>
+                  @if (canRetry()) {
+                    <p-button 
+                      label="Retry"
+                      icon="pi pi-refresh"
+                      size="small"
+                      severity="secondary"
+                      outlined
+                      class="ml-3"
+                      (onClick)="retryEvaluation()">
+                    </p-button>
+                  }
+                </div>
+              </p-message>
+            </div>
+          }
+
+          <div class="form-group">
+            <div class="flex gap-2">
+              <p-button 
+                label="Evaluate with AI"
+                icon="pi pi-sparkles"
+                class="flex-1"
+                [loading]="isEvaluating()"
+                [disabled]="!canEvaluate()"
+                (onClick)="evaluateAnswer()">
+              </p-button>
+              <p-button 
+                icon="pi pi-microphone"
+                severity="secondary"
+                outlined
+                pTooltip="Voice Recording (Coming Soon)"
+                [disabled]="true">
+              </p-button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Card -->
+    <div class="col-span-12 lg:col-span-6">
+      <div class="card mb-0">
+        <div class="card-header">
+          <div class="flex justify-between items-center">
             <div>
-              <label for="question" class="block text-sm font-medium text-color mb-2">
-                Interview Question *
-              </label>
-              <p-textarea
-                formControlName="question"
-                rows="3"
-                styleClass="w-full"
-                placeholder="Enter the interview question here...">
-              </p-textarea>
+              <h3 class="text-surface-900 dark:text-surface-0 font-medium mb-4">AI Evaluation Results</h3>
+              <p>Detailed feedback and scoring from AI analysis</p>
+            </div>
+            @if (evaluation()) {
+              <div class="flex items-center gap-2">
+                <p-tag 
+                  [value]="evaluation()!.percentage + '%'"
+                  [severity]="getScoreSeverity(evaluation()!.percentage)">
+                </p-tag>
+                <span class="text-xs text-muted-color">
+                  {{ evaluation()!.overallScore }}/{{ evaluation()!.maxScore }}
+                </span>
+              </div>
+            }
+          </div>
+        </div>
+
+        @if (isEvaluating()) {
+          <div class="flex flex-col gap-4 py-8">
+            <div class="text-center">
+              <i class="pi pi-spin pi-spinner text-4xl text-primary mb-4"></i>
+              <p class="font-medium">Analyzing your response...</p>
+              <p class="text-sm text-muted-color">This may take a few moments</p>
+            </div>
+            <p-skeleton height="3rem" borderRadius="8px"></p-skeleton>
+            <p-skeleton height="4rem" borderRadius="8px"></p-skeleton>
+            <p-skeleton height="3rem" borderRadius="8px"></p-skeleton>
+          </div>
+        } @else if (!evaluation()) {
+          <div class="flex items-center justify-center py-8 text-center">
+            <div>
+              <i class="pi pi-sparkles text-6xl mb-4 opacity-20 text-primary"></i>
+              <h4 class="font-medium mb-2">Ready for AI Evaluation</h4>
+              <p class="text-muted-color text-sm mb-3">
+                Configure your interview settings and provide your answer to get detailed AI feedback
+              </p>
+              <p class="text-xs text-muted-color">
+                <i class="pi pi-info-circle mr-1"></i>
+                Evaluation typically takes 5-15 seconds
+              </p>
+            </div>
+          </div>
+        } @else {
+          <div class="flex flex-col gap-4">
+            <!-- Recommendation Badge -->
+            <div class="text-center">
+              <p-tag 
+                [value]="'Recommendation: ' + evaluation()!.recommendation"
+                [severity]="getRecommendationSeverity(evaluation()!.recommendation)"
+                class="text-base px-3 py-2">
+              </p-tag>
             </div>
 
-            <!-- Voice Recording Section -->
-            @if (env.isFeatureEnabled('audioRecording')) {
+            <!-- Overall Feedback -->
+            <div class="surface-100 p-3 border-round">
+              <div class="font-semibold mb-2 flex items-center gap-2">
+                <i class="pi pi-comment text-primary"></i>
+                Overall Feedback
+              </div>
+              <p class="text-sm leading-6 m-0">
+                {{ evaluation()!.detailedFeedback }}
+              </p>
+            </div>
+
+            <!-- Detailed Scores -->
+            @if (getCriteriaItems().length > 0) {
               <div>
-                <label class="block text-sm font-medium text-color mb-2">
-                  🎤 Record Your Answer
-                </label>
-                
-                <div class="recording-container p-4 border-2 border-primary-200 border-round bg-primary-50">
-                  <div class="flex flex-column gap-4">
-                    <div class="text-center">
-                      <p class="text-sm text-color-secondary mb-4">
-                        Speak your answer clearly and naturally, just like in a real interview.
-                      </p>
-                    </div>
-                    
-                    <div class="flex justify-content-center gap-3 flex-wrap">
-                      @if (!isRecording() && !lastRecording()) {
-                        <p-button
-                          icon="pi pi-microphone"
-                          label="Start Recording"
-                          (onClick)="startRecording()"
-                          [disabled]="!canRecord() || isProcessing()">
-                        </p-button>
-                      }
-                      
-                      @if (isRecording()) {
-                        <p-button
-                          icon="pi pi-stop"
-                          label="Stop Recording ({{ formatTime(recordingDuration()) }})"
-                          severity="danger"
-                          (onClick)="stopRecording()"
-                          styleClass="animate-pulse">
-                        </p-button>
-                      }
-                      
-                      @if (lastRecording() && !isRecording()) {
-                        <p-button
-                          icon="pi pi-refresh"
-                          label="Re-record"
-                          severity="secondary"
-                          (onClick)="startRecording()"
-                          [disabled]="!canRecord() || isProcessing()">
-                        </p-button>
-                        
-                        @if (!isProcessing()) {
-                          <p-button
-                            [icon]="isPlaying() ? 'pi pi-pause' : 'pi pi-play'"
-                            [label]="(isPlaying() ? 'Pause' : 'Play') + ' (' + formatTime(lastRecording()?.duration || 0) + ')'"
-                            severity="help"
-                            (onClick)="togglePlayback()"
-                            [disabled]="isProcessing()">
-                          </p-button>
-                          
-                          <p-button
-                            icon="pi pi-check"
-                            label="Process Recording"
-                            severity="success"
-                            (onClick)="processRecording()">
-                          </p-button>
-                        }
-                      }
-                    </div>
-                    
-                    <!-- Audio Playback Progress -->
-                    @if (isPlaying() && lastRecording()) {
-                      <div class="text-center">
-                        <div class="text-sm text-color mb-2">
-                          🎵 Playing: {{ formatTime(playbackDuration()) }} / {{ formatTime(lastRecording()?.duration || 0) }}
-                        </div>
-                        <p-progressBar 
-                          [value]="(playbackDuration() / (lastRecording()?.duration || 1)) * 100"
-                          styleClass="playback-progress">
-                        </p-progressBar>
+                <div class="font-semibold mb-3 flex items-center gap-2">
+                  <i class="pi pi-chart-bar text-primary"></i>
+                  Detailed Scoring
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  @for (criteriaItem of getCriteriaItems(); track criteriaItem.key) {
+                    <div class="flex flex-col gap-2">
+                      <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium">
+                          {{ criteriaItem.label }}
+                        </span>
+                        <span class="text-sm font-semibold">
+                          {{ criteriaItem.score }}/10
+                        </span>
                       </div>
-                    }
-                    
-                    @if (isProcessing()) {
-                      <div class="text-center py-4">
-                        <div class="loading-spinner mb-2"></div>
-                        <p class="text-sm text-primary font-medium">{{ processingStatus() }}</p>
-                      </div>
-                    }
-                  </div>
-                  
-                  <!-- Transcription Preview -->
-                  @if (lastTranscription()) {
-                    <div class="mt-4 p-4 bg-green-50 border-1 border-green-200 border-round">
-                      <h4 class="font-medium text-green-900 mb-2">✅ Recording Processed Successfully</h4>
-                      <p class="text-sm text-green-800 italic mb-2">"{{ lastTranscription()?.text }}"</p>
-                      <small class="text-green-600">
-                        Duration: {{ lastRecording()?.duration || 0 }} seconds | {{ getTranscriptionWordCount() }} words
-                      </small>
+                      <p-progressBar 
+                        [value]="criteriaItem.score * 10" 
+                        [showValue]="false"
+                        class="h-2">
+                      </p-progressBar>
                     </div>
                   }
                 </div>
               </div>
+
+              <p-divider></p-divider>
             }
 
-            <!-- Role and Proficiency Selection -->
-            <div class="grid grid-cols-12 gap-4">
-              <div class="col-span-12 sm:col-span-6">
-                <label for="role" class="block text-sm font-medium text-color mb-2">
-                  Role *
-                </label>
-                <p-select
-                  formControlName="role"
-                  [options]="roleOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  styleClass="w-full">
-                </p-select>
-              </div>
+            <!-- Strengths and Improvements -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              @if (evaluation()!.strengths.length > 0) {
+                <div>
+                  <div class="font-semibold mb-3 flex items-center gap-2">
+                    <i class="pi pi-check-circle text-green-500"></i>
+                    Strengths
+                  </div>
+                  <ul class="list-none p-0 m-0">
+                    @for (strength of evaluation()!.strengths; track strength) {
+                      <li class="flex items-start gap-2 mb-2">
+                        <i class="pi pi-plus-circle text-green-500 text-xs mt-1"></i>
+                        <span class="text-sm leading-5">{{ strength }}</span>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
 
-              <div class="col-span-12 sm:col-span-6">
-                <label for="proficiencyLevel" class="block text-sm font-medium text-color mb-2">
-                  Proficiency Level *
-                </label>
-                <p-select
-                  formControlName="proficiencyLevel"
-                  [options]="proficiencyOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  styleClass="w-full">
-                </p-select>
-              </div>
+              @if (evaluation()!.improvements.length > 0) {
+                <div>
+                  <div class="font-semibold mb-3 flex items-center gap-2">
+                    <i class="pi pi-exclamation-triangle text-orange-500"></i>
+                    Areas for Improvement
+                  </div>
+                  <ul class="list-none p-0 m-0">
+                    @for (improvement of evaluation()!.improvements; track improvement) {
+                      <li class="flex items-start gap-2 mb-2">
+                        <i class="pi pi-arrow-circle-right text-orange-500 text-xs mt-1"></i>
+                        <span class="text-sm leading-5">{{ improvement }}</span>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
             </div>
 
-            <!-- Question Type and Context -->
-            <div class="grid grid-cols-12 gap-4">
-              <div class="col-span-12 sm:col-span-6">
-                <label for="questionType" class="block text-sm font-medium text-color mb-2">
-                  Question Type
-                </label>
-                <p-select
-                  formControlName="questionType"
-                  [options]="questionTypeOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  styleClass="w-full">
-                </p-select>
-              </div>
-
-              <div class="col-span-12 sm:col-span-6">
-                <label for="context" class="block text-sm font-medium text-color mb-2">
-                  Context (Optional)
-                </label>
-                <p-inputText
-                  formControlName="context"
-                  styleClass="w-full"
-                  placeholder="e.g., Startup, Enterprise, Remote">
-                </p-inputText>
-              </div>
-            </div>
-
-            <!-- Submit Button -->
-            @if (env.isFeatureEnabled('aiAnalysis')) {
-              <div class="pt-2">
-                <p-button
-                  label="🚀 Evaluate Interview Answer"
-                  icon="pi pi-send"
-                  (onClick)="evaluateAudioRecording()"
-                  [loading]="isLoading()"
-                  [disabled]="!canEvaluate()"
-                  styleClass="w-full"
-                  size="large">
-                </p-button>
-              </div>
-            }
-
-            <!-- API Status -->
-            <div class="text-center">
-              <p-tag
-                [value]="apiStatus()"
-                [severity]="apiStatusSeverity()">
-              </p-tag>
-            </div>
-          </form>
-        </p-card>
-
-        <!-- Sample Questions -->
-        <p-card header="💡 Sample Questions">
-          <div class="flex flex-column gap-3">
-            @for (sample of sampleQuestions; track sample.question) {
-              <div class="sample-question p-3 border-left-3 border-primary surface-hover border-round">
-                <p class="font-medium text-sm text-color mb-1">{{ sample.question }}</p>
-                <p class="text-xs text-color-secondary mb-2">{{ sample.role }} • {{ sample.level }}</p>
-                <p-button
-                  label="Use This"
-                  size="small"
-                  severity="secondary"
-                  (onClick)="useSampleQuestion(sample)">
-                </p-button>
+            <!-- Next Steps -->
+            @if (evaluation()!.nextSteps.length > 0) {
+              <p-divider></p-divider>
+              
+              <div>
+                <div class="font-semibold mb-3 flex items-center gap-2">
+                  <i class="pi pi-forward text-blue-500"></i>
+                  Next Steps
+                </div>
+                <ul class="list-none p-0 m-0">
+                  @for (step of evaluation()!.nextSteps; track step) {
+                    <li class="flex items-start gap-2 mb-2">
+                      <i class="pi pi-angle-double-right text-blue-500 text-xs mt-1"></i>
+                      <span class="text-sm leading-5">{{ step }}</span>
+                    </li>
+                  }
+                </ul>
               </div>
             }
           </div>
-        </p-card>
+        }
       </div>
-    </div>
-
-    <!-- Results Display -->
-    <div class="col-span-12 xl:col-span-6">
-      @if (evaluationResult() || isLoading() || error()) {
-        <p-card header="📊 Evaluation Results" styleClass="results-card">
-          <!-- Loading State -->
-          @if (isLoading()) {
-            <div class="text-center py-8">
-              <div class="loading-spinner mb-4"></div>
-              <p class="text-color-secondary">Evaluating your answer...</p>
-              <p class="text-sm text-color-secondary">This may take 10-30 seconds</p>
-            </div>
-          }
-
-          <!-- Error State -->
-          @if (error()) {
-            <div class="py-4">
-              <p-message severity="error" [text]="error()!"></p-message>
-            </div>
-          }
-
-          <!-- Results -->
-          @if (evaluationResult() && !isLoading()) {
-            <div class="flex flex-column gap-6">
-              <!-- Overall Score -->
-              <div class="overall-score text-center p-4 bg-gradient-to-r from-primary-50 to-primary-100 border-round">
-                <div class="text-4xl font-bold mb-2" [class]="getScoreColor(evaluationResult()!.percentage)">
-                  {{ evaluationResult()!.percentage }}%
-                </div>
-                <div class="text-lg text-color-secondary mb-2">
-                  {{ evaluationResult()!.overallScore }}/{{ evaluationResult()!.maxScore }} points
-                </div>
-                <p-tag 
-                  [value]="evaluationResult()!.recommendation"
-                  [severity]="getRecommendationSeverity(evaluationResult()!.recommendation)"
-                  styleClass="font-medium">
-                </p-tag>
-
-                <!-- Reading Detection Alert -->
-                @if (isReadingDetected()) {
-                  <div class="mt-4 p-3 bg-red-50 border-2 border-red-200 border-round">
-                    <div class="flex align-items-center justify-content-center mb-2">
-                      <i class="pi pi-exclamation-triangle text-red-600 text-xl mr-2"></i>
-                      <span class="text-red-800 font-bold text-sm">🚨 READING BEHAVIOR DETECTED</span>
-                    </div>
-                    <div class="text-red-700 text-xs">
-                      <div class="mb-1">Authenticity Score: {{ getReadingScore() }}/10</div>
-                      <div class="text-red-600">{{ getReadingExplanation() }}</div>
-                    </div>
-                  </div>
-                }
-              </div>
-
-              <!-- Criteria Scores -->
-              @if (criteriaArray().length > 0) {
-                <div>
-                  <h3 class="text-lg font-semibold mb-4">🎯 Detailed Scores</h3>
-                  <div class="flex flex-column gap-3">
-                    @for (criterion of criteriaArray(); track criterion.key) {
-                      <div class="criterion-card p-4 border-1 surface-border border-round">
-                        <!-- Criterion name and score -->
-                        <div class="flex align-items-center justify-content-between mb-3">
-                          <span class="text-sm font-medium text-color capitalize">
-                            {{ criterion.name }}
-                          </span>
-                          <span class="text-sm font-bold text-color">
-                            {{ criterion.value }}<span class="text-color-secondary font-normal">/10</span>
-                          </span>
-                        </div>
-                        
-                        <!-- Progress bar -->
-                        <div class="mb-2">
-                          <p-progressBar 
-                            [value]="getScorePercentage(criterion.value)"
-                            [showValue]="false"
-                            styleClass="h-3">
-                          </p-progressBar>
-                        </div>
-                        
-                        <!-- Score percentage -->
-                        <div class="text-right">
-                          <span class="text-xs text-color-secondary">
-                            {{ getScorePercentage(criterion.value) }}%
-                          </span>
-                        </div>
-                        
-                        <!-- Per-criterion feedback -->
-                        @if (criterion.feedback) {
-                          <div class="mt-3 p-3 surface-section border-left-2 border-primary border-round">
-                            <p class="text-xs text-color-secondary leading-relaxed break-words">
-                              {{ criterion.feedback }}
-                            </p>
-                          </div>
-                        }
-                      </div>
-                    }
-                  </div>
-                </div>
-              }
-
-              <p-divider></p-divider>
-
-              <!-- Strengths -->
-              @if (evaluationResult()!.strengths.length > 0) {
-                <div>
-                  <h3 class="text-lg font-semibold mb-3 text-green-700">✅ Strengths</h3>
-                  <div class="flex flex-column gap-3">
-                    @for (strength of evaluationResult()!.strengths; track strength) {
-                      <div class="flex align-items-start gap-3 p-3 bg-green-50 border-left-3 border-green-400 border-round">
-                        <span class="text-green-500 text-sm font-bold flex-shrink-0 mt-1">✓</span>
-                        <span class="text-sm text-green-800 line-height-3">{{ strength }}</span>
-                      </div>
-                    }
-                  </div>
-                </div>
-              }
-
-              <!-- Improvements -->
-              @if (evaluationResult()!.improvements.length > 0) {
-                <div>
-                  <h3 class="text-lg font-semibold mb-3 text-orange-700">⚡ Areas for Improvement</h3>
-                  <div class="flex flex-column gap-3">
-                    @for (improvement of evaluationResult()!.improvements; track improvement) {
-                      <div class="flex align-items-start gap-3 p-3 border-left-3 border-round"
-                           [class]="getImprovementSeverity(improvement) === 'danger' ? 'bg-red-50 border-red-400' : 'bg-orange-50 border-orange-400'">
-                        <span class="text-sm flex-shrink-0 mt-1" 
-                              [class]="getImprovementSeverity(improvement) === 'danger' ? 'text-red-600' : 'text-orange-500'">
-                          {{ getImprovementSeverity(improvement) === 'danger' ? '🚨' : '•' }}
-                        </span>
-                        <span class="text-sm line-height-3"
-                              [class]="getImprovementSeverity(improvement) === 'danger' ? 'text-red-800 font-medium' : 'text-orange-800'">
-                          {{ improvement }}
-                        </span>
-                      </div>
-                    }
-                  </div>
-                </div>
-              }
-
-              <!-- Detailed Feedback -->
-              <div>
-                <h3 class="text-lg font-semibold mb-3">📝 Detailed Feedback</h3>
-                <div class="p-4 surface-section border-left-3 border-surface-400 border-round">
-                  <p class="text-sm text-color line-height-3">
-                    {{ evaluationResult()!.detailedFeedback }}
-                  </p>
-                </div>
-              </div>
-
-              <!-- Reading Analysis Section -->
-              @if (hasAudioAnalysis()) {
-                <div>
-                  <h3 class="text-lg font-semibold mb-3">🎤 Speech Authenticity Analysis</h3>
-                  <div class="p-4 border-round"
-                       [class]="isReadingDetected() ? 'bg-red-50 border-2 border-red-200' : 'bg-green-50 border-2 border-green-200'">
-                    <div class="flex align-items-start gap-3">
-                      <div class="flex-shrink-0">
-                        <i class="text-2xl" 
-                           [class]="isReadingDetected() ? 'pi pi-exclamation-triangle text-red-600' : 'pi pi-check-circle text-green-600'"></i>
-                      </div>
-                      <div class="flex-1">
-                        <div class="flex align-items-center mb-2">
-                          <span class="font-medium"
-                                [class]="isReadingDetected() ? 'text-red-800' : 'text-green-800'">
-                            {{ isReadingDetected() ? 'Script Reading Detected' : 'Natural Speech Detected' }}
-                          </span>
-                          <p-tag 
-                            [value]="getReadingScore() + '/10'"
-                            [severity]="getReadingScoreSeverity()"
-                            styleClass="ml-2">
-                          </p-tag>
-                        </div>
-                        <p class="text-sm mb-3"
-                           [class]="isReadingDetected() ? 'text-red-800' : 'text-green-800'">
-                          {{ getReadingExplanation() }}
-                        </p>
-                        @if (getReadingIndicators().length > 0) {
-                          <div class="flex flex-column gap-1">
-                            <div class="text-xs font-medium"
-                                 [class]="isReadingDetected() ? 'text-red-800' : 'text-green-800'">
-                              Detected Indicators:
-                            </div>
-                            <div class="flex flex-wrap gap-1">
-                              @for (indicator of getReadingIndicators(); track indicator) {
-                                <p-tag 
-                                  [value]="indicator"
-                                  severity="danger"
-                                  size="small">
-                                </p-tag>
-                              }
-                            </div>
-                          </div>
-                        }
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              }
-
-              <!-- Next Steps -->
-              @if (evaluationResult()!.nextSteps.length > 0) {
-                <div>
-                  <h3 class="text-lg font-semibold mb-3 text-primary">🎯 Next Steps</h3>
-                  <div class="flex flex-column gap-3">
-                    @for (step of evaluationResult()!.nextSteps; track step) {
-                      <div class="flex align-items-start gap-3 p-3 bg-primary-50 border-left-3 border-primary border-round">
-                        <span class="text-primary text-sm font-bold flex-shrink-0 mt-1">→</span>
-                        <span class="text-sm text-primary-800 line-height-3">{{ step }}</span>
-                      </div>
-                    }
-                  </div>
-                </div>
-              }
-
-              <!-- Action Buttons -->
-              <div class="flex justify-content-center gap-4 mt-4">
-                <p-button 
-                  label="Back to Dashboard" 
-                  icon="pi pi-home"
-                  severity="secondary"
-                  (onClick)="goToDashboard()">
-                </p-button>
-              </div>
-            </div>
-          }
-        </p-card>
-      }
     </div>
   </div>
 </div>

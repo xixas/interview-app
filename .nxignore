@@ -1,0 +1,28 @@
+examples/
+tmp/
+
+# Documentation not needed for NX operations
+*.md
+!README.md
+!shared-interfaces/README.md
+
+# Test screenshots and reports
+.playwright-mcp/
+coverage/
+test-results/
+
+# AI assistant artifacts
+.claude/
+.serena/
+
+# Log files
+*.log
+logs/
+
+# Environment files
+.env*
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3

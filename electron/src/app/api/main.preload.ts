@@ -1,5 +1,25 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+// Also expose the electronAPI interface for compatibility with the backup pattern
+contextBridge.exposeInMainWorld('electronAPI', {
+  // Database operations
+  database: {
+    initialize: () => ipcRenderer.invoke('db-initialize'),
+    getTechnologies: () => ipcRenderer.invoke('db-get-technologies'),
+    getRandomQuestions: (filters: any) => ipcRenderer.invoke('db-get-random-questions', filters),
+    getQuestionsByTechnology: (technology: string) => ipcRenderer.invoke('db-get-questions-by-technology', technology),
+  },
+
+  // AI Evaluator operations
+  evaluator: {
+    transcribeAudio: (audioData: string) => ipcRenderer.invoke('evaluator-transcribe', audioData),
+    evaluateAnswer: (data: any) => ipcRenderer.invoke('evaluator-evaluate-answer', data),
+    batchEvaluate: (evaluations: any[]) => ipcRenderer.invoke('evaluator-batch-evaluate', evaluations),
+    generateSummary: (data: any) => ipcRenderer.invoke('evaluator-generate-summary', data),
+    validateKey: () => ipcRenderer.invoke('evaluator-validate-key'),
+  },
+});
+
 contextBridge.exposeInMainWorld('electron', {
   // App info
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
@@ -48,6 +68,23 @@ contextBridge.exposeInMainWorld('electron', {
     requestPermissions: () => ipcRenderer.invoke('request-media-permissions'),
   },
   
+  // Database operations
+  database: {
+    initialize: () => ipcRenderer.invoke('db-initialize'),
+    getTechnologies: () => ipcRenderer.invoke('db-get-technologies'),
+    getRandomQuestions: (filters: any) => ipcRenderer.invoke('db-get-random-questions', filters),
+    getQuestionsByTechnology: (technology: string) => ipcRenderer.invoke('db-get-questions-by-technology', technology),
+  },
+
+  // AI Evaluator operations
+  evaluator: {
+    transcribeAudio: (audioData: string) => ipcRenderer.invoke('evaluator-transcribe', audioData),
+    evaluateAnswer: (data: any) => ipcRenderer.invoke('evaluator-evaluate-answer', data),
+    batchEvaluate: (evaluations: any[]) => ipcRenderer.invoke('evaluator-batch-evaluate', evaluations),
+    generateSummary: (data: any) => ipcRenderer.invoke('evaluator-generate-summary', data),
+    validateKey: () => ipcRenderer.invoke('evaluator-validate-key'),
+  },
+
   // Auto-updater
   updater: {
     checkForUpdates: () => ipcRenderer.invoke('updater-check'),

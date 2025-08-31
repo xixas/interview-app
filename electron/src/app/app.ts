@@ -22,6 +22,12 @@ export default class App {
   }
 
   private static onWindowAllClosed() {
+    // Cleanup IPC handlers
+    if (App.ipcHandlers) {
+      App.ipcHandlers.cleanup();
+      App.ipcHandlers = null;
+    }
+    
     if (process.platform !== 'darwin') {
       App.application.quit();
     }
@@ -51,8 +57,10 @@ export default class App {
       App.loadMainWindow();
       App.setupApplicationMenu();
       
-      // Initialize IPC handlers
-      App.ipcHandlers = new IPCHandlers();
+      // Initialize IPC handlers only once
+      if (!App.ipcHandlers) {
+        App.ipcHandlers = new IPCHandlers();
+      }
     }
   }
 

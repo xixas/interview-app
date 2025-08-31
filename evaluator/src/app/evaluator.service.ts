@@ -25,35 +25,37 @@ export class EvaluatorService {
   private openai: OpenAI;
 
   constructor(private configService: ConfigService) {
-    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-    if (apiKey) {
-      this.openai = new OpenAI({ apiKey });
-    } else {
-      this.logger.warn('OpenAI API key not found. Using mock evaluation.');
-    }
+    // Don't initialize OpenAI here - it will be created per request with API key from headers
+    this.logger.log('EvaluatorService initialized - API key will be provided per request');
   }
 
-  async evaluateAnswer(dto: EvaluateAnswerDto): Promise<EvaluationResult> {
+  async evaluateAnswer(dto: EvaluateAnswerDto, apiKey?: string): Promise<EvaluationResult> {
     this.logger.log(`Evaluating answer for ${dto.role} ${dto.proficiencyLevel} role`);
 
-    if (this.openai) {
-      this.logger.log('Using AI evaluation with OpenAI');
-      return this.evaluateWithAI(dto);
-    } else {
-      this.logger.log('Using mock evaluation (no OpenAI API key)');
-      return this.createMockEvaluation(dto);
+    if (!apiKey || !apiKey.trim()) {
+      throw new Error('OpenAI API key is required. Please configure your API key in the application settings.');
     }
+
+    this.logger.log('Using AI evaluation with provided OpenAI API key');
+    return this.evaluateWithAI(dto, apiKey);
   }
 
-  private async evaluateWithAI(dto: EvaluateAnswerDto): Promise<EvaluationResult> {
+  private async evaluateWithAI(dto: EvaluateAnswerDto, apiKey: string): Promise<EvaluationResult> {
     try {
       this.logger.log('Starting AI evaluation...');
+      
+      // Create OpenAI client with provided API key
+      const trimmedApiKey = apiKey.trim();
+      this.logger.log(`Using API key starting with: ${trimmedApiKey.substring(0, 7)}...`);
+      const openai = new OpenAI({ apiKey: trimmedApiKey });
+      
       const applicableCriteria = this.getApplicableCriteria(dto.questionType, dto.question);
       this.logger.log(`Applicable criteria for question "${dto.question}": ${applicableCriteria.join(', ')}`);
       
       const prompt = this.buildEvaluationPrompt(dto, applicableCriteria);
       
-      const completion = await this.openai.chat.completions.create({
+      this.logger.log('Making request to OpenAI API...');
+      const completion = await openai.chat.completions.create({
         model: 'gpt-4',
         messages: [
           {
@@ -77,9 +79,21 @@ export class EvaluatorService {
       this.logger.log('AI evaluation completed, parsing response...');
       return this.parseAIResponse(aiResponse, dto, applicableCriteria);
     } catch (error) {
-      this.logger.error('AI evaluation failed, falling back to mock:', error.message);
-      // Fallback to mock evaluation
-      return this.createMockEvaluation(dto);
+      this.logger.error('AI evaluation failed:', error);
+      
+      // Check for specific OpenAI error types
+      if (error?.status === 401 || error?.code === 'invalid_api_key') {
+        throw new Error('Invalid OpenAI API key. Please check your API key in Settings and try again.');
+      } else if (error?.status === 429) {
+        throw new Error('OpenAI API rate limit exceeded. Please try again in a few minutes.');
+      } else if (error?.status === 403) {
+        throw new Error('OpenAI API access denied. Please check your account permissions and billing status.');
+      } else if (error?.message?.includes('insufficient_quota')) {
+        throw new Error('OpenAI API quota exceeded. Please check your account billing and usage limits.');
+      } else {
+        this.logger.error('Detailed error:', JSON.stringify(error, null, 2));
+        throw new Error(`AI evaluation failed: ${error.message || 'Unknown error'}. Please check your API key and try again.`);
+      }
     }
   }
 

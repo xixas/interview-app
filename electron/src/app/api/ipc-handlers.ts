@@ -4,13 +4,22 @@ import { join } from 'path';
 import { app } from 'electron';
 import * as os from 'os';
 
+// Import database and evaluator services
+import { DatabaseService } from '../services/database.service';
+import { EvaluatorService } from '../services/evaluator.service';
+
 export class IPCHandlers {
   private settings: Map<string, any> = new Map();
   private settingsPath: string;
+  private databaseService: DatabaseService;
+  private evaluatorService: EvaluatorService;
 
   constructor() {
     this.settingsPath = join(app.getPath('userData'), 'settings.json');
+    this.databaseService = new DatabaseService();
     this.loadSettings();
+    // Pass settings reference to evaluator service for API key access
+    this.evaluatorService = new EvaluatorService('http://localhost:3001', this.settings);
     this.registerHandlers();
   }
 
@@ -18,10 +27,14 @@ export class IPCHandlers {
     try {
       const settingsData = await readFile(this.settingsPath, 'utf8');
       const settings = JSON.parse(settingsData);
-      this.settings = new Map(Object.entries(settings));
+      // Update existing Map instead of replacing it to maintain the reference
+      this.settings.clear();
+      Object.entries(settings).forEach(([key, value]) => {
+        this.settings.set(key, value);
+      });
     } catch (error) {
       // Settings file doesn't exist or is invalid, start with defaults
-      this.settings = new Map();
+      this.settings.clear();
       this.settings.set('theme', 'system');
       this.settings.set('notifications', true);
       this.settings.set('autoStart', false);
@@ -41,8 +54,26 @@ export class IPCHandlers {
   }
 
   private registerHandlers() {
-    // Remove any existing handlers first
-    ipcMain.removeAllListeners();
+    // Remove existing handlers for specific channels to avoid conflicts
+    const channels = [
+      'get-app-version', 'window-minimize', 'window-maximize', 'window-close', 
+      'window-is-maximized', 'window-set-always-on-top', 'file-save', 'file-open',
+      'export-results', 'import-questions', 'show-notification', 'open-external',
+      'show-in-folder', 'get-system-info', 'settings-get', 'settings-set',
+      'settings-get-all', 'settings-reset', 'get-media-devices', 
+      'check-media-permissions', 'request-media-permissions', 'updater-check',
+      'updater-download', 'updater-install',
+      // Database IPC channels
+      'db-initialize', 'db-get-technologies', 'db-get-random-questions', 
+      'db-get-questions-by-technology',
+      // Evaluator IPC channels
+      'evaluator-transcribe', 'evaluator-evaluate-answer', 'evaluator-batch-evaluate', 
+      'evaluator-generate-summary', 'evaluator-validate-key'
+    ];
+    
+    channels.forEach(channel => {
+      ipcMain.removeHandler(channel);
+    });
     
     // App version
     ipcMain.handle('get-app-version', () => {
@@ -287,6 +318,168 @@ export class IPCHandlers {
       }
     });
 
+    // Database IPC handlers
+    ipcMain.handle('db-initialize', async () => {
+      try {
+        console.log('IPC Handler: db-initialize called');
+        await this.databaseService.initialize();
+        console.log('IPC Handler: Database initialized successfully');
+        return { success: true, message: 'Database initialized successfully' };
+      } catch (error) {
+        console.error('IPC Handler: Database initialization failed:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('db-get-technologies', async () => {
+      try {
+        console.log('IPC Handler: db-get-technologies called');
+        const technologies = await this.databaseService.getTechnologies();
+        console.log('IPC Handler: Got technologies:', technologies);
+        return { success: true, data: technologies };
+      } catch (error) {
+        console.error('IPC Handler: Failed to get technologies:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('db-get-random-questions', async (_, filters) => {
+      try {
+        const questions = await this.databaseService.getRandomQuestions(filters);
+        return { success: true, data: questions };
+      } catch (error) {
+        console.error('Failed to get random questions:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('db-get-questions-by-technology', async (_, technology) => {
+      try {
+        const questions = await this.databaseService.getQuestionsByTechnology(technology);
+        return { success: true, data: questions };
+      } catch (error) {
+        console.error('Failed to get questions by technology:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    // Evaluator IPC handlers
+    ipcMain.handle('evaluator-transcribe', async (_, audioData) => {
+      try {
+        const result = await this.evaluatorService.transcribeAudio(audioData);
+        return { success: true, data: result };
+      } catch (error) {
+        console.error('Audio transcription failed:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('evaluator-evaluate-answer', async (_, evaluationData) => {
+      try {
+        const result = await this.evaluatorService.evaluateAnswer(evaluationData);
+        return { success: true, data: result };
+      } catch (error) {
+        console.error('Answer evaluation failed:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('evaluator-batch-evaluate', async (_, evaluations) => {
+      try {
+        const results = await this.evaluatorService.batchEvaluateAnswers(evaluations);
+        return { success: true, data: results };
+      } catch (error) {
+        console.error('Batch evaluation failed:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('evaluator-generate-summary', async (_, summaryData) => {
+      try {
+        const summary = await this.evaluatorService.generateInterviewSummary(summaryData);
+        return { success: true, data: summary };
+      } catch (error) {
+        console.error('Summary generation failed:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('evaluator-validate-key', async () => {
+      try {
+        // Step 1: Check if API key exists
+        const apiKey = this.settings.get('openai_api_key');
+        if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
+          return { 
+            success: true, 
+            valid: false, 
+            message: 'No API key configured. Please set your OpenAI API key in Settings.' 
+          };
+        }
+        
+        // Step 2: Format validation
+        const trimmedKey = apiKey.trim();
+        if (!trimmedKey.startsWith('sk-') || trimmedKey.length <= 20) {
+          return {
+            success: true,
+            valid: false,
+            message: 'Invalid API key format. OpenAI API keys should start with "sk-" and be longer than 20 characters.',
+            keyPreview: `${trimmedKey.substring(0, Math.min(7, trimmedKey.length))}...${trimmedKey.slice(-Math.min(4, trimmedKey.length))}`
+          };
+        }
+
+        // Step 3: Actual API validation with OpenAI
+        try {
+          const { OpenAI } = await import('openai');
+          const openai = new OpenAI({ apiKey: trimmedKey });
+          
+          // Make lightweight API call to verify key works
+          await openai.models.list();
+          
+          return {
+            success: true,
+            valid: true,
+            message: 'API key is valid and authenticated with OpenAI',
+            keyPreview: `${trimmedKey.substring(0, 7)}...${trimmedKey.slice(-4)}`
+          };
+        } catch (apiError: any) {
+          // Handle specific OpenAI API errors
+          if (apiError?.status === 401 || apiError?.code === 'invalid_api_key') {
+            return {
+              success: true,
+              valid: false,
+              message: 'Invalid API key. The key was rejected by OpenAI. Please check your key and try again.',
+              keyPreview: `${trimmedKey.substring(0, 7)}...${trimmedKey.slice(-4)}`
+            };
+          } else if (apiError?.status === 429) {
+            return {
+              success: true,
+              valid: false,
+              message: 'OpenAI API rate limit exceeded. Please try again in a few minutes.'
+            };
+          } else if (apiError?.message?.toLowerCase().includes('quota')) {
+            return {
+              success: true,
+              valid: false,
+              message: 'OpenAI API quota exceeded. Please check your account usage and billing.'
+            };
+          } else {
+            // For other API errors, assume key might be valid but there's a service issue
+            return {
+              success: true,
+              valid: false,
+              message: `Unable to verify API key: ${apiError?.message || 'Unknown OpenAI API error'}. Please try again later.`
+            };
+          }
+        }
+      } catch (error: any) {
+        console.error('API key validation failed:', error);
+        return { 
+          success: false, 
+          error: `Failed to validate API key: ${error?.message || 'Unknown error'}` 
+        };
+      }
+    });
+
     // Auto-updater (placeholder - would need actual implementation)
     ipcMain.handle('updater-check', () => {
       // Placeholder for auto-updater check
@@ -320,6 +513,33 @@ export class IPCHandlers {
       return [csvHeaders, ...csvRows].join('\n');
     }
     return '';
+  }
+
+  // Cleanup method to remove all handlers
+  public cleanup() {
+    const channels = [
+      'get-app-version', 'window-minimize', 'window-maximize', 'window-close', 
+      'window-is-maximized', 'window-set-always-on-top', 'file-save', 'file-open',
+      'export-results', 'import-questions', 'show-notification', 'open-external',
+      'show-in-folder', 'get-system-info', 'settings-get', 'settings-set',
+      'settings-get-all', 'settings-reset', 'get-media-devices', 
+      'check-media-permissions', 'request-media-permissions', 'updater-check',
+      'updater-download', 'updater-install',
+      // Database and evaluator channels
+      'db-initialize', 'db-get-technologies', 'db-get-random-questions', 
+      'db-get-questions-by-technology', 'evaluator-transcribe', 
+      'evaluator-evaluate-answer', 'evaluator-batch-evaluate', 
+      'evaluator-generate-summary', 'evaluator-validate-key'
+    ];
+    
+    channels.forEach(channel => {
+      ipcMain.removeHandler(channel);
+    });
+
+    // Close database connection on cleanup
+    if (this.databaseService) {
+      this.databaseService.close().catch(console.error);
+    }
   }
 
   // Broadcast app state changes to renderer
