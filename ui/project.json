@@ -90,7 +90,8 @@
       },
       "defaultConfiguration": "development",
       "options": {
-        "proxyConfig": "ui/proxy.conf.json"
+        "proxyConfig": "ui/proxy.conf.json",
+        "port": 3002
       }
     },
     "extract-i18n": {
@@ -114,7 +115,7 @@
       "executor": "@nx/web:file-server",
       "options": {
         "buildTarget": "ui:build",
-        "port": 4200,
+        "port": 3002,
         "staticFilePath": "dist/ui/browser",
         "spa": true
       }

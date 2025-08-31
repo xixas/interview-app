@@ -20,25 +20,24 @@ export interface WorkInProgressConfig {
   imports: [CommonModule, ButtonModule, CardModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="page-container">
-      <div class="flex flex-col items-center justify-center min-h-[60vh] p-8">
-        <div class="card mb-0 max-w-4xl w-full text-center px-8 py-12 relative overflow-hidden bg-surface-ground border border-surface-border before:content-[''] before:absolute before:top-0 before:left-0 before:right-0 before:h-1 before:bg-gradient-to-r before:from-primary before:to-primary-light">
-          <!-- Icon Section -->
-          <div class="relative mb-8">
-            <div class="inline-block">
-              <i class="pi pi-cog animate-spin text-orange-500 text-6xl"></i>
-            </div>
+    <div class="flex flex-col items-center justify-center min-h-[60vh] p-8">
+      <div class="card mb-0 max-w-4xl w-full text-center px-8 py-12 relative overflow-hidden bg-surface-ground border border-surface-border before:content-[''] before:absolute before:top-0 before:left-0 before:right-0 before:h-1 before:bg-gradient-to-r before:from-primary before:to-primary-light">
+        <!-- Icon Section -->
+        <div class="relative mb-8">
+          <div class="inline-block">
+            <i class="pi pi-cog animate-spin text-orange-500 text-6xl"></i>
           </div>
+        </div>
 
-          <!-- Content Section -->
-          <div class="flex flex-col gap-8">
-            <h1 class="text-surface-900 dark:text-surface-0 text-3xl font-bold mb-4 text-center">
-              {{ config().title }}
-            </h1>
-            
-            <p class="text-surface-600 dark:text-surface-400 text-lg text-center mb-8 max-w-2xl mx-auto leading-relaxed">
-              {{ config().description }}
-            </p>
+        <!-- Content Section -->
+        <div class="flex flex-col gap-8">
+          <h2 class="text-surface-900 dark:text-surface-0 text-2xl font-bold mb-4 text-center">
+            {{ config().title }}
+          </h2>
+          
+          <p class="text-surface-600 dark:text-surface-400 text-lg text-center mb-8 max-w-2xl mx-auto leading-relaxed">
+            {{ config().description }}
+          </p>
 
             <!-- Status Badge -->
             <div class="flex justify-center">
@@ -101,7 +100,6 @@ export interface WorkInProgressConfig {
           </p>
         </div>
       </div>
-    </div>
   `,
   styles: [`
     /* Custom animation for construction indicator */

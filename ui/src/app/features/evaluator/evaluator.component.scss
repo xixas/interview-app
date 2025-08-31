@@ -224,6 +224,32 @@
   }
 }
 
+// Recording button animations (can't be done with Tailwind alone)
+@keyframes pulse-recording {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(1.2); opacity: 0; }
+}
+
+// Custom recording button states (using theme variables)
+.recording-pulse {
+  position: relative;
+  animation: pulse-recording 1.5s infinite;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: -4px; left: -4px; right: -4px; bottom: -4px;
+    border: 2px solid var(--red-400);
+    border-radius: 50%;
+    animation: pulse-ring 1.5s infinite;
+  }
+}
+
 // Form controls
 ::ng-deep .p-select,
 ::ng-deep .p-inputtext,

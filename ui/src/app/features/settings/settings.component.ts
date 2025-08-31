@@ -11,6 +11,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
 import { EvaluatorIpcService } from '../../core/services/evaluator-ipc.service';
+import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 interface ApiKeyStatus {
   status: 'none' | 'testing' | 'valid' | 'invalid' | 'error';
@@ -30,15 +31,17 @@ interface ApiKeyStatus {
     SelectModule,
     PasswordModule,
     TooltipModule,
-    ProgressSpinnerModule
+    ProgressSpinnerModule,
+    PageHeaderComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="page-container">
-      <div class="page-header">
-        <h1>Settings</h1>
-        <p>Configure your Interview App preferences</p>
-      </div>
+      <app-page-header 
+        title="Settings"
+        description="Configure your Interview App preferences"
+        icon="pi pi-cog">
+      </app-page-header>
 
       <div class="flex justify-center">
         <!-- OpenAI Configuration Card - Centered with max width -->

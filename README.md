@@ -55,7 +55,7 @@ npm run dev
 ```
 
 This will start:
-- Angular UI dev server at `http://localhost:4200`
+- Angular UI dev server at `http://localhost:3002`
 - API server at `http://localhost:3000`
 - Evaluator service at `http://localhost:3001`
 

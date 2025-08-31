@@ -13,8 +13,8 @@ async function bootstrap() {
   // Enable CORS for Angular frontend and Electron app
   app.enableCors({
     origin: [
-      'http://localhost:4200',       // Angular dev server
-      'http://127.0.0.1:4200',       // Alternative localhost format
+      'http://localhost:3002',       // Angular dev server (updated to 3002)
+      'http://127.0.0.1:3002',       // Alternative localhost format
       'file://',                     // Electron packaged app
       /^file:\/\/.*$/,               // All file protocol requests
     ],
@@ -25,7 +25,7 @@ async function bootstrap() {
   
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
-  const port = process.env.PORT || 3000;
+  const port = process.env.API_PORT || process.env.PORT || 3000;
   await app.listen(port);
   Logger.log(
     `🚀 Application is running on: http://localhost:${port}/${globalPrefix}`

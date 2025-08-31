@@ -139,7 +139,7 @@ For frontend-only development:
 ```bash
 # Start just the Angular dev server
 npm run nxe:serve:frontend
-# Access at http://localhost:4200
+# Access at http://localhost:3002
 ```
 
 For full-stack development:
@@ -162,7 +162,7 @@ npm run nxe:serve:backend
 
 ### Development URLs
 
-- **Angular UI**: http://localhost:4200
+- **Angular UI**: http://localhost:3002
 - **API Server**: http://localhost:3000
 - **Evaluator Service**: http://localhost:3001
 - **Nx Graph**: http://localhost:4211 (run `npx nx graph`)
@@ -272,7 +272,7 @@ sqlite3 api/src/assets/mock-interview-backup-2025-08-08.db "SELECT count(*) FROM
 ### Frontend Debugging
 
 Angular with Chrome DevTools:
-1. Open http://localhost:4200 in Chrome
+1. Open http://localhost:3002 in Chrome
 2. Open DevTools (F12)
 3. Use Angular DevTools extension for enhanced debugging
 
@@ -320,11 +320,11 @@ npm config set python python3
 
 #### Port Already in Use
 ```bash
-# Find and kill process using port 4200
-lsof -ti:4200 | xargs kill -9
+# Find and kill process using port 3002
+lsof -ti:3002 | xargs kill -9
 
 # Or use different port
-npm run nxe:serve:frontend -- --port 4201
+npm run nxe:serve:frontend -- --port 3003
 ```
 
 #### Electron Won't Start

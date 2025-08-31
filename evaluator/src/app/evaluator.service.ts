@@ -188,15 +188,15 @@ ANSWER: ${dto.answer}
 
 CONTEXT: ${dto.context || 'Standard interview setting'}
 
-QUESTION TYPE: ${dto.questionType}
+QUESTION TYPE: ${dto.questionType || 'technical'}
 
-PROFICIENCY EXPECTATIONS (${dto.proficiencyLevel.toUpperCase()}):
+PROFICIENCY EXPECTATIONS (${dto.proficiencyLevel?.toUpperCase() || 'MID'}):
 ${proficiencyExpectations}
 
-ROLE-SPECIFIC CRITERIA (${dto.role.toUpperCase()}):
+ROLE-SPECIFIC CRITERIA (${dto.role?.toUpperCase() || 'GENERAL'}):
 ${roleSpecificCriteria}
 
-IMPORTANT: This is a ${dto.questionType} question. Please evaluate based ONLY on these relevant criteria (score 1-10 for each):
+IMPORTANT: This is a ${dto.questionType || 'technical'} question. Please evaluate based ONLY on these relevant criteria (score 1-10 for each):
 ${relevantCriteriaList}
 
 Note: Some criteria may not apply to this question type. Focus only on the listed criteria above.
@@ -387,7 +387,7 @@ IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is 
       [ProficiencyLevel.SENIOR]: 'Deep technical expertise, system design skills, mentoring ability, strong architectural knowledge, performance optimization',
       [ProficiencyLevel.LEAD]: 'Strategic technical leadership, cross-team collaboration, technology selection, complex system architecture, business alignment',
     };
-    return expectations[level];
+    return expectations[level] || expectations[ProficiencyLevel.MID];
   }
 
   private getRoleSpecificCriteria(role: Role): string {

@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, signal, inject, OnInit } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { FluidModule } from 'primeng/fluid';
@@ -15,8 +15,11 @@ import { SkeletonModule } from 'primeng/skeleton';
 import { ToolbarModule } from 'primeng/toolbar';
 import { EvaluatorApiService, DemoData } from './services/evaluator-api.service';
 import { EvaluatorIpcService } from '../../core/services/evaluator-ipc.service';
+import { PageHeaderComponent } from '../../shared/components/page-header.component';
+import { EnvironmentService } from '../../core/services/environment.service';
 import { 
   EvaluationResult, 
+  AudioEvaluationResult,
   ProficiencyLevel, 
   Role, 
   QuestionType 
@@ -39,29 +42,43 @@ import {
         SelectModule,
         MessageModule,
         SkeletonModule,
-        ToolbarModule
+        ToolbarModule,
+        PageHeaderComponent
     ],
     changeDetection: ChangeDetectionStrategy.OnPush,
     templateUrl: './evaluator.component.html',
     styleUrls: ['./evaluator.component.scss']
 })
-export class EvaluatorComponent implements OnInit {
+export class EvaluatorComponent implements OnInit, OnDestroy {
     private readonly evaluatorApi = inject(EvaluatorApiService);
     private readonly evaluatorIpc = inject(EvaluatorIpcService);
+    private readonly env = inject(EnvironmentService);
 
     // Form state
     answer = '';
+    interviewQuestion = '';
     selectedRole: Role | null = null;
-    selectedLevel: ProficiencyLevel | null = null;  
-    selectedType: QuestionType = QuestionType.TECHNICAL;
+    selectedLevel: ProficiencyLevel | null = null;
+
+    // Audio recording state
+    isRecording = signal(false);
+    recordedAudio = signal<Blob | null>(null);
+    recordingDuration = signal(0);
+    audioDuration = signal(0);
+    isPlayingAudio = signal(false);
+    
+    private mediaRecorder: MediaRecorder | null = null;
+    private audioChunks: Blob[] = [];
+    private audioUrl: string | null = null;
+    private recordingTimer: any = null;
+    private recordingStartTime = 0;
+    private currentAudio: HTMLAudioElement | null = null;
 
     // Component state
-    currentQuestion = signal('Click "Generate New Question" or "Load Sample" to get started with an interview question.');
     isEvaluating = signal(false);
-    evaluation = signal<EvaluationResult | null>(null);
+    evaluation = signal<EvaluationResult | AudioEvaluationResult | null>(null);
     errorMessage = signal('');
     serviceStatus = signal<'available' | 'unavailable' | 'checking'>('checking');
-    demoData = signal<DemoData | null>(null);
     isCheckingService = signal(false);
     retryCount = signal(0);
 
@@ -83,20 +100,21 @@ export class EvaluatorComponent implements OnInit {
         { label: 'Lead/Principal (8+ years)', value: ProficiencyLevel.LEAD }
     ];
 
-    typeOptions = [
-        { label: 'Technical Knowledge', value: QuestionType.TECHNICAL },
-        { label: 'Behavioral/Situational', value: QuestionType.BEHAVIORAL },
-        { label: 'System Design', value: QuestionType.SYSTEM_DESIGN },
-        { label: 'Coding/Algorithm', value: QuestionType.CODING }
-    ];
-
     ngOnInit() {
         this.checkServiceHealth();
-        this.loadDemoData();
+    }
+
+    ngOnDestroy() {
+        this.cleanupRecording();
+        if (this.audioUrl) {
+            URL.revokeObjectURL(this.audioUrl);
+        }
     }
 
     canEvaluate(): boolean {
-        return this.answer.trim().length > 10 && !!this.selectedRole && !!this.selectedLevel;
+        const hasQuestion = this.interviewQuestion.trim().length > 0;
+        const hasAudioAnswer = this.recordedAudio() !== null;
+        return hasQuestion && hasAudioAnswer && !!this.selectedRole && !!this.selectedLevel;
     }
 
     getWordCount(text: string): number {
@@ -132,81 +150,35 @@ export class EvaluatorComponent implements OnInit {
         });
     }
 
-    loadDemoData() {
-        this.evaluatorApi.getDemoData().subscribe({
-            next: (data) => {
-                this.demoData.set(data);
-            },
-            error: (error) => {
-                console.warn('Could not load demo data:', error);
-                // Provide fallback demo data
-                this.demoData.set({
-                    sampleQuestion: 'Explain the difference between let, const, and var in JavaScript.',
-                    sampleAnswer: 'var is function-scoped and can be hoisted, let is block-scoped and cannot be redeclared in the same scope, const is block-scoped and cannot be reassigned after declaration.',
-                    availableRoles: this.roleOptions.map(opt => opt.label),
-                    availableProficiencyLevels: this.levelOptions.map(opt => opt.label),
-                    questionTypes: this.typeOptions.map(opt => opt.label)
-                });
-            }
-        });
-    }
 
-    loadSampleData() {
-        const demo = this.demoData();
-        if (demo) {
-            this.currentQuestion.set(demo.sampleQuestion);
-            this.answer = demo.sampleAnswer;
-            this.selectedRole = Role.FRONTEND;
-            this.selectedLevel = ProficiencyLevel.MID;
-            this.selectedType = QuestionType.TECHNICAL;
-        }
-    }
 
     resetForm() {
         this.answer = '';
+        this.interviewQuestion = '';
         this.selectedRole = null;
         this.selectedLevel = null;
-        this.selectedType = QuestionType.TECHNICAL;
         this.evaluation.set(null);
         this.errorMessage.set('');
-        this.currentQuestion.set('Click "Generate New Question" or "Load Sample" to get started with an interview question.');
+        this.clearRecording();
     }
 
-    generateNewQuestion() {
-        const questions = {
-            [QuestionType.TECHNICAL]: [
-                'Explain the event loop in JavaScript and how it handles asynchronous operations.',
-                'What are the differences between SQL and NoSQL databases? When would you use each?',
-                'Describe the concept of RESTful APIs and the principles behind REST architecture.',
-                'Explain how CSS specificity works and provide examples of different specificity levels.'
-            ],
-            [QuestionType.BEHAVIORAL]: [
-                'Tell me about a time when you had to work with a difficult team member. How did you handle the situation?',
-                'Describe a challenging project you worked on. What obstacles did you face and how did you overcome them?',
-                'Give me an example of when you had to learn a new technology quickly for a project.'
-            ],
-            [QuestionType.SYSTEM_DESIGN]: [
-                'Design a URL shortening service like bit.ly. Consider scalability, reliability, and performance.',
-                'How would you design a real-time chat application that can handle millions of users?',
-                'Design a caching system for a high-traffic e-commerce website.'
-            ],
-            [QuestionType.CODING]: [
-                'Write a function to find the longest substring without repeating characters.',
-                'Implement a function to reverse a linked list.',
-                'Design an algorithm to find the shortest path between two nodes in a graph.'
-            ]
-        };
-
-        const typeQuestions = questions[this.selectedType] || questions[QuestionType.TECHNICAL];
-        const randomQuestion = typeQuestions[Math.floor(Math.random() * typeQuestions.length)];
-        this.currentQuestion.set(randomQuestion);
-    }
 
     async evaluateAnswer() {
         if (!this.canEvaluate()) {
-            this.errorMessage.set('Please provide an answer and select both role and experience level.');
+            this.errorMessage.set('Please ensure you have a valid audio recording and all required fields are filled.');
             return;
         }
+
+        const recordedAudio = this.recordedAudio();
+        if (!recordedAudio) {
+            this.errorMessage.set('Cannot evaluate: No audio recording found. Please record your answer first.');
+            return;
+        }
+
+        // Convert Blob to File for proper API compatibility
+        const audioFile = new File([recordedAudio], 'audio-recording.webm', {
+            type: recordedAudio.type || 'audio/webm'
+        });
 
         this.isEvaluating.set(true);
         this.errorMessage.set('');
@@ -219,57 +191,51 @@ export class EvaluatorComponent implements OnInit {
             }
 
             const request = {
-                questionId: Date.now().toString(), // Generate a unique ID
-                question: this.currentQuestion(),
-                answer: this.answer,
-                technology: this.selectedRole?.toLowerCase() || 'general',
-                difficulty: this.selectedLevel?.toLowerCase() || 'medium',
-                timeSpent: 0 // Could be tracked in the future
+                question: this.interviewQuestion,
+                role: this.selectedRole as Role,
+                proficiencyLevel: this.selectedLevel as ProficiencyLevel,
+                questionType: QuestionType.TECHNICAL, // Default to technical
+                context: undefined, // Optional context
+                audioFile: audioFile
             };
 
-            const result = await this.evaluatorIpc.evaluateAnswer(request);
+            console.log('Sending audio evaluation request with:', {
+                question: request.question,
+                role: request.role,
+                proficiencyLevel: request.proficiencyLevel,
+                questionType: request.questionType,
+                audioFile: `${audioFile.name} (${audioFile.size} bytes)`
+            });
+
+            const result = await this.evaluatorApi.evaluateAudioAnswer(request).toPromise();
             this.retryCount.set(0); // Reset retry count on success
             
-            // Convert IPC response to expected UI format
-            const evaluation: EvaluationResult = {
-                overallScore: result.score,
-                maxScore: 100,
-                percentage: result.score,
-                criteria: {
-                    technicalAccuracy: result.technicalAccuracy,
-                    clarity: result.communication, // Map communication to clarity
-                    completeness: result.completeness,
-                    problemSolving: Math.round((result.technicalAccuracy + result.completeness) / 2), // Calculated
-                    communication: result.communication,
-                    bestPractices: Math.round((result.technicalAccuracy + result.communication) / 2) // Calculated
-                },
-                strengths: result.strengths,
-                improvements: result.improvements,
-                detailedFeedback: result.feedback,
-                recommendation: result.score >= 80 ? 'PASS' : result.score >= 60 ? 'CONDITIONAL' : 'FAIL',
-                nextSteps: result.improvements.map((imp: string) => `Work on: ${imp}`)
-            };
-
-            console.log('Evaluation completed:', evaluation);
-            this.evaluation.set(evaluation);
+            if (result) {
+                console.log('Audio evaluation completed:', result);
+                this.evaluation.set(result);
+            } else {
+                throw new Error('No evaluation result received');
+            }
         } catch (error: any) {
-            console.error('Evaluation failed:', error);
+            console.error('Audio evaluation failed:', error);
             
             // Provide specific error messages based on error type
-            if (error.message?.includes('Desktop mode is required')) {
-                this.errorMessage.set('AI evaluation requires the desktop version of the app. Please use the desktop client.');
-            } else if (error.message?.includes('API key')) {
-                this.errorMessage.set('OpenAI API key is not configured or invalid. Please check your Settings.');
-            } else if (error.message?.includes('rate limit') || error.status === 429) {
-                this.errorMessage.set('API rate limit exceeded. Please wait a moment before trying again.');
-            } else if (error.message?.includes('network') || error.status === 0) {
-                this.errorMessage.set('Network error. Please check your internet connection and try again.');
+            if (error.status === 0) {
+                this.errorMessage.set('Cannot connect to evaluation service. Please ensure the evaluator service is running on port 3001.');
             } else if (error.status === 401) {
-                this.errorMessage.set('Authentication failed. Please verify your API key in Settings.');
+                this.errorMessage.set('OpenAI API key is not configured or invalid. Please check your API key configuration in the evaluator service.');
+            } else if (error.status === 429) {
+                this.errorMessage.set('API rate limit exceeded. Please wait a moment before trying again.');
+            } else if (error.status === 413) {
+                this.errorMessage.set('Audio file is too large. Please record a shorter answer or check the service configuration.');
+            } else if (error.status === 400) {
+                this.errorMessage.set('Invalid request format. Please ensure all required fields are filled correctly.');
+            } else if (error.status === 500) {
+                this.errorMessage.set('Internal server error. Please check the evaluator service logs and ensure your OpenAI API key is valid.');
             } else if (error.status >= 500) {
-                this.errorMessage.set('Server error. The evaluation service is temporarily unavailable.');
+                this.errorMessage.set('Server error. The evaluation service is temporarily unavailable. Please try again later.');
             } else {
-                this.errorMessage.set(`Evaluation failed: ${error.message || 'Please try again later.'}`);
+                this.errorMessage.set(`Audio evaluation failed: ${error.message || 'Unknown error occurred. Please try again.'}`);
             }
             
             // Increment retry count for potential auto-retry logic
@@ -277,6 +243,217 @@ export class EvaluatorComponent implements OnInit {
         } finally {
             this.isEvaluating.set(false);
         }
+    }
+
+    // Audio Recording Methods
+    toggleRecording() {
+        if (this.isRecording()) {
+            this.stopRecording();
+        } else {
+            this.startRecording();
+        }
+    }
+
+    async startRecording() {
+        if (!this.env.isFeatureEnabled('audioRecording')) {
+            this.errorMessage.set('Audio recording is not available in this environment.');
+            return;
+        }
+
+        try {
+            this.errorMessage.set('');
+
+            // Request microphone access
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                } 
+            });
+
+            // Reset previous recording data
+            this.audioChunks = [];
+            this.recordedAudio.set(null);
+            this.recordingDuration.set(0);
+            if (this.audioUrl) {
+                URL.revokeObjectURL(this.audioUrl);
+                this.audioUrl = null;
+            }
+
+            // Create MediaRecorder
+            this.mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'audio/webm;codecs=opus'
+            });
+
+            // Handle data available event
+            this.mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    this.audioChunks.push(event.data);
+                }
+            };
+
+            // Handle recording stop
+            this.mediaRecorder.onstop = () => {
+                this.processRecordedAudio();
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            // Start recording
+            this.mediaRecorder.start();
+            this.isRecording.set(true);
+            this.recordingStartTime = Date.now();
+
+            // Start duration timer
+            this.recordingTimer = setInterval(() => {
+                const duration = Math.floor((Date.now() - this.recordingStartTime) / 1000);
+                this.recordingDuration.set(duration);
+            }, 100);
+
+            // Auto-stop after 5 minutes
+            setTimeout(() => {
+                if (this.isRecording()) {
+                    this.stopRecording();
+                }
+            }, 300000);
+
+        } catch (error) {
+            console.error('Failed to start recording:', error);
+            this.isRecording.set(false);
+
+            if (error instanceof Error) {
+                if (error.name === 'NotAllowedError') {
+                    this.errorMessage.set('Microphone access denied. Please allow microphone permissions and try again.');
+                } else if (error.name === 'NotFoundError') {
+                    this.errorMessage.set('No microphone found. Please connect a microphone and try again.');
+                } else {
+                    this.errorMessage.set('Failed to access microphone: ' + error.message);
+                }
+            } else {
+                this.errorMessage.set('Failed to start recording. Please try again.');
+            }
+        }
+    }
+
+    stopRecording() {
+        if (this.recordingTimer) {
+            clearInterval(this.recordingTimer);
+            this.recordingTimer = null;
+        }
+        this.isRecording.set(false);
+
+        // Stop MediaRecorder if active
+        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+            this.mediaRecorder.stop();
+        }
+    }
+
+    private processRecordedAudio() {
+        if (this.audioChunks.length === 0) {
+            this.errorMessage.set('No audio data recorded. Please try again.');
+            return;
+        }
+
+        // Create audio blob
+        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+        this.recordedAudio.set(audioBlob);
+        this.audioUrl = URL.createObjectURL(audioBlob);
+
+        // Calculate audio duration (approximate from recording time)
+        const duration = Math.floor((Date.now() - this.recordingStartTime) / 1000);
+        this.audioDuration.set(duration);
+
+        // Audio recording complete - ready for evaluation
+        console.log('Audio recording completed, ready for evaluation');
+    }
+
+
+    togglePlayback() {
+        if (this.isPlayingAudio()) {
+            this.pauseRecording();
+        } else {
+            this.playRecording();
+        }
+    }
+
+    playRecording() {
+        if (this.audioUrl) {
+            // Stop any currently playing audio
+            if (this.currentAudio) {
+                this.currentAudio.pause();
+                this.currentAudio.currentTime = 0;
+            }
+
+            this.currentAudio = new Audio(this.audioUrl);
+            this.currentAudio.addEventListener('ended', () => {
+                this.isPlayingAudio.set(false);
+                this.currentAudio = null;
+            });
+
+            this.currentAudio.addEventListener('error', () => {
+                console.error('Failed to play audio');
+                this.errorMessage.set('Failed to play audio recording.');
+                this.isPlayingAudio.set(false);
+                this.currentAudio = null;
+            });
+
+            this.currentAudio.play().then(() => {
+                this.isPlayingAudio.set(true);
+            }).catch(error => {
+                console.error('Failed to play audio:', error);
+                this.errorMessage.set('Failed to play audio recording.');
+                this.isPlayingAudio.set(false);
+                this.currentAudio = null;
+            });
+        }
+    }
+
+    pauseRecording() {
+        if (this.currentAudio) {
+            this.currentAudio.pause();
+            this.isPlayingAudio.set(false);
+        }
+    }
+
+    clearRecording() {
+        this.cleanupRecording();
+        this.recordedAudio.set(null);
+        this.recordingDuration.set(0);
+        this.audioDuration.set(0);
+        this.isPlayingAudio.set(false);
+        
+        // Stop any playing audio
+        if (this.currentAudio) {
+            this.currentAudio.pause();
+            this.currentAudio = null;
+        }
+        
+        if (this.audioUrl) {
+            URL.revokeObjectURL(this.audioUrl);
+            this.audioUrl = null;
+        }
+    }
+
+    private cleanupRecording() {
+        if (this.recordingTimer) {
+            clearInterval(this.recordingTimer);
+            this.recordingTimer = null;
+        }
+        this.isRecording.set(false);
+
+        if (this.mediaRecorder) {
+            if (this.mediaRecorder.state === 'recording') {
+                this.mediaRecorder.stop();
+            }
+            this.mediaRecorder = null;
+        }
+        this.audioChunks = [];
+    }
+
+    formatTime(seconds: number): string {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
     }
 
     getCriteriaItems() {
@@ -316,9 +493,6 @@ export class EvaluatorComponent implements OnInit {
         this.checkServiceHealth();
     }
 
-    isDesktopMode(): boolean {
-        return !!(window.electronAPI || (window as any).electron);
-    }
 
     canRetry(): boolean {
         return this.retryCount() > 0 && this.retryCount() < 3 && !this.isEvaluating();

@@ -41,6 +41,7 @@ import { EnvironmentService } from '../../core/services/environment.service';
 import { ElectronService } from '../../core/services/electron.service';
 import { DatabaseIpcService } from '../../core/services/database-ipc.service';
 import { EvaluatorIpcService } from '../../core/services/evaluator-ipc.service';
+import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 interface InterviewSettings {
   category: string;
@@ -141,7 +142,8 @@ interface InterviewResult {
     MessageModule,
     TagModule,
     PanelModule,
-    FluidModule
+    FluidModule,
+    PageHeaderComponent
   ],
   templateUrl: './interview.component.html',
   styleUrl: './interview.component.scss',
@@ -169,8 +171,8 @@ export class InterviewComponent implements OnInit, OnDestroy {
     difficulty: 'medium',
     numberOfQuestions: 10,
     allowSkip: true,
-    recordAudio: this.env.isFeatureEnabled('audioRecording'),
-    enableAIAnalysis: this.env.isFeatureEnabled('aiAnalysis')
+    recordAudio: true, // Always enabled for interview practice
+    enableAIAnalysis: true // Always enabled for AI-powered feedback
   });
 
 
@@ -996,17 +998,6 @@ export class InterviewComponent implements OnInit, OnDestroy {
     this.settings.update(current => ({ ...current, numberOfQuestions: validatedValue }));
   }
 
-  onAllowSkipChange(value: boolean) {
-    this.settings.update(current => ({ ...current, allowSkip: value }));
-  }
-
-  onEnableAIChange(value: boolean) {
-    this.settings.update(current => ({ ...current, enableAIAnalysis: value }));
-  }
-
-  onRecordAudioChange(value: boolean) {
-    this.settings.update(current => ({ ...current, recordAudio: value }));
-  }
 
   // Utility methods
   formatMarkdown(markdown: string): string {

@@ -19,6 +19,15 @@ export interface EvaluateAnswerRequest {
   context?: string;
 }
 
+export interface EvaluateAudioRequest {
+  question: string;
+  role: Role;
+  proficiencyLevel: ProficiencyLevel;
+  questionType: QuestionType;
+  context?: string;
+  audioFile: File;
+}
+
 export interface DemoData {
   sampleQuestion: string;
   sampleAnswer: string;
@@ -44,6 +53,34 @@ export class EvaluatorApiService {
           console.error('Error evaluating answer:', error);
           // Return mock data on error
           return of(this.createMockEvaluation(request));
+        })
+      );
+  }
+
+  evaluateAudioAnswer(request: EvaluateAudioRequest): Observable<AudioEvaluationResult> {
+    console.log('Evaluating audio answer with request:', { 
+      ...request, 
+      audioFile: `File: ${request.audioFile.name} (${request.audioFile.size} bytes)` 
+    });
+    
+    // Create FormData to send multipart/form-data
+    const formData = new FormData();
+    formData.append('audioFile', request.audioFile);
+    formData.append('question', request.question);
+    formData.append('role', request.role);
+    formData.append('proficiencyLevel', request.proficiencyLevel);
+    formData.append('questionType', request.questionType);
+    if (request.context) {
+      formData.append('context', request.context);
+    }
+
+    return this.http.post<AudioEvaluationResult>(`${this.baseUrl}/evaluate-audio`, formData)
+      .pipe(
+        tap(result => console.log('Audio evaluation result:', result)),
+        catchError(error => {
+          console.error('Error evaluating audio answer:', error);
+          // Return mock audio evaluation on error
+          return of(this.createMockAudioEvaluation(request));
         })
       );
   }
@@ -120,6 +157,75 @@ export class EvaluatorApiService {
         ...(request.proficiencyLevel === ProficiencyLevel.SENIOR ? ['Focus on system design'] : []),
         'Continue practicing technical communication'
       ]
+    };
+  }
+
+  private createMockAudioEvaluation(request: EvaluateAudioRequest): AudioEvaluationResult {
+    // Create base evaluation with mock answer
+    const mockTextRequest: EvaluateAnswerRequest = {
+      question: request.question,
+      answer: 'This is a transcribed audio answer with reasonable technical content and communication.',
+      role: request.role,
+      proficiencyLevel: request.proficiencyLevel,
+      questionType: request.questionType,
+      context: request.context
+    };
+    
+    const baseEvaluation = this.createMockEvaluation(mockTextRequest);
+    
+    // Add audio-specific criteria
+    const audioSpecificCriteria = {
+      speakingPace: 8,
+      confidence: 7,
+      articulation: 8,
+      professionalPresence: 7
+    };
+    
+    const combinedCriteria = {
+      ...baseEvaluation.criteria,
+      ...audioSpecificCriteria
+    };
+    
+    // Recalculate totals with audio criteria
+    const totalScore = Object.values(combinedCriteria).reduce((sum, score) => sum + score, 0);
+    const maxScore = Object.keys(combinedCriteria).length * 10;
+    const percentage = Math.round((totalScore / maxScore) * 100);
+    
+    return {
+      ...baseEvaluation,
+      overallScore: totalScore,
+      maxScore,
+      percentage,
+      criteria: combinedCriteria,
+      strengths: [
+        ...baseEvaluation.strengths,
+        'Good speaking pace and clarity',
+        'Professional communication style'
+      ],
+      improvements: [
+        ...baseEvaluation.improvements,
+        'Consider reducing filler words slightly'
+      ],
+      detailedFeedback: `${baseEvaluation.detailedFeedback} Audio communication analysis: Speaking pace was appropriate at approximately 150 words per minute. Communication confidence and professional presence were good overall.`,
+      transcription: {
+        text: 'This is a mock transcription of the audio answer. The actual transcription would contain the spoken response.',
+        duration: 45,
+        language: 'en'
+      },
+      audioAnalysis: {
+        speakingRate: 150,
+        pauseCount: 3,
+        averagePauseLength: 1.2,
+        fillerWordCount: 2,
+        confidenceMarkers: ['clear statements', 'definitive language'],
+        hesitationMarkers: ['um', 'uh'],
+        readingAnomalies: {
+          isLikelyReading: false,
+          readingIndicators: [],
+          naturalityScore: 8,
+          explanation: 'Natural conversational delivery with appropriate speech patterns'
+        }
+      }
     };
   }
 

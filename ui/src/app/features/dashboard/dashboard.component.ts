@@ -1,17 +1,26 @@
 import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { WorkInProgressComponent, WorkInProgressConfig } from '../../shared/components/work-in-progress.component';
+import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 @Component({
     selector: 'app-dashboard',
     standalone: true,
     imports: [
         CommonModule,
-        WorkInProgressComponent
+        WorkInProgressComponent,
+        PageHeaderComponent
     ],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
-        <app-work-in-progress [config]="dashboardConfig()" />
+        <div class="page-container">
+            <app-page-header 
+                title="Dashboard"
+                description="Monitor your interview performance and progress"
+                icon="pi pi-chart-line">
+            </app-page-header>
+            <app-work-in-progress [config]="dashboardConfig()" />
+        </div>
     `,
     styles: []
 })
