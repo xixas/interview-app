@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   evaluator: {
     transcribeAudio: (audioData: string) => ipcRenderer.invoke('evaluator-transcribe', audioData),
     evaluateAnswer: (data: any) => ipcRenderer.invoke('evaluator-evaluate-answer', data),
+    evaluateAudioAnswer: (data: any) => ipcRenderer.invoke('evaluator-evaluate-audio-answer', data),
     batchEvaluate: (evaluations: any[]) => ipcRenderer.invoke('evaluator-batch-evaluate', evaluations),
     generateSummary: (data: any) => ipcRenderer.invoke('evaluator-generate-summary', data),
     validateKey: () => ipcRenderer.invoke('evaluator-validate-key'),
@@ -80,6 +81,7 @@ contextBridge.exposeInMainWorld('electron', {
   evaluator: {
     transcribeAudio: (audioData: string) => ipcRenderer.invoke('evaluator-transcribe', audioData),
     evaluateAnswer: (data: any) => ipcRenderer.invoke('evaluator-evaluate-answer', data),
+    evaluateAudioAnswer: (data: any) => ipcRenderer.invoke('evaluator-evaluate-audio-answer', data),
     batchEvaluate: (evaluations: any[]) => ipcRenderer.invoke('evaluator-batch-evaluate', evaluations),
     generateSummary: (data: any) => ipcRenderer.invoke('evaluator-generate-summary', data),
     validateKey: () => ipcRenderer.invoke('evaluator-validate-key'),

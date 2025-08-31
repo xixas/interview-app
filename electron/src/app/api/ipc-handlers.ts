@@ -67,8 +67,8 @@ export class IPCHandlers {
       'db-initialize', 'db-get-technologies', 'db-get-random-questions', 
       'db-get-questions-by-technology',
       // Evaluator IPC channels
-      'evaluator-transcribe', 'evaluator-evaluate-answer', 'evaluator-batch-evaluate', 
-      'evaluator-generate-summary', 'evaluator-validate-key'
+      'evaluator-transcribe', 'evaluator-evaluate-answer', 'evaluator-evaluate-audio-answer',
+      'evaluator-batch-evaluate', 'evaluator-generate-summary', 'evaluator-validate-key'
     ];
     
     channels.forEach(channel => {
@@ -384,6 +384,16 @@ export class IPCHandlers {
       }
     });
 
+    ipcMain.handle('evaluator-evaluate-audio-answer', async (_, audioEvaluationData) => {
+      try {
+        const result = await this.evaluatorService.evaluateAudioAnswer(audioEvaluationData);
+        return { success: true, data: result };
+      } catch (error) {
+        console.error('Audio answer evaluation failed:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle('evaluator-batch-evaluate', async (_, evaluations) => {
       try {
         const results = await this.evaluatorService.batchEvaluateAnswers(evaluations);
@@ -528,8 +538,8 @@ export class IPCHandlers {
       // Database and evaluator channels
       'db-initialize', 'db-get-technologies', 'db-get-random-questions', 
       'db-get-questions-by-technology', 'evaluator-transcribe', 
-      'evaluator-evaluate-answer', 'evaluator-batch-evaluate', 
-      'evaluator-generate-summary', 'evaluator-validate-key'
+      'evaluator-evaluate-answer', 'evaluator-evaluate-audio-answer',
+      'evaluator-batch-evaluate', 'evaluator-generate-summary', 'evaluator-validate-key'
     ];
     
     channels.forEach(channel => {

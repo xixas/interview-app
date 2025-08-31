@@ -13,7 +13,6 @@ import { SelectModule } from 'primeng/select';
 import { MessageModule } from 'primeng/message';
 import { SkeletonModule } from 'primeng/skeleton';
 import { ToolbarModule } from 'primeng/toolbar';
-import { EvaluatorApiService, DemoData } from './services/evaluator-api.service';
 import { EvaluatorIpcService } from '../../core/services/evaluator-ipc.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 import { EnvironmentService } from '../../core/services/environment.service';
@@ -50,7 +49,6 @@ import {
     styleUrls: ['./evaluator.component.scss']
 })
 export class EvaluatorComponent implements OnInit, OnDestroy {
-    private readonly evaluatorApi = inject(EvaluatorApiService);
     private readonly evaluatorIpc = inject(EvaluatorIpcService);
     private readonly env = inject(EnvironmentService);
 
@@ -125,29 +123,28 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
         this.isCheckingService.set(true);
         this.serviceStatus.set('checking');
         
-        this.evaluatorApi.healthCheck().subscribe({
-            next: (response) => {
-                this.serviceStatus.set(response.status === 'healthy' ? 'available' : 'unavailable');
-                if (response.status !== 'healthy') {
-                    this.errorMessage.set('Evaluation service is not ready. Please check your API key configuration.');
-                }
-                this.isCheckingService.set(false);
-            },
-            error: (error) => {
-                this.serviceStatus.set('unavailable');
-                this.isCheckingService.set(false);
-                
-                if (error.status === 0) {
-                    this.errorMessage.set('Cannot connect to evaluation service. Please ensure the service is running.');
-                } else if (error.status === 401) {
-                    this.errorMessage.set('API key authentication failed. Please check your OpenAI API key in Settings.');
-                } else if (error.status === 429) {
-                    this.errorMessage.set('API rate limit exceeded. Please wait a moment before trying again.');
-                } else {
-                    this.errorMessage.set(`Service unavailable: ${error.message || 'Unknown error'}`);
-                }
+        try {
+            // Check if running in Electron environment
+            if (!this.evaluatorIpc.isElectronAvailable()) {
+                throw new Error('Desktop mode is required. Please run the Electron application.');
             }
-        });
+
+            // Use IPC API key validation as health check
+            const validationResult = await this.evaluatorIpc.validateApiKey();
+            
+            if (validationResult.valid) {
+                this.serviceStatus.set('available');
+                this.errorMessage.set('');
+            } else {
+                this.serviceStatus.set('unavailable');
+                this.errorMessage.set(validationResult.message || 'API key validation failed. Please check your configuration.');
+            }
+        } catch (error: any) {
+            this.serviceStatus.set('unavailable');
+            this.errorMessage.set(error.message || 'Service unavailable. Please ensure you are running the desktop application.');
+        } finally {
+            this.isCheckingService.set(false);
+        }
     }
 
 
@@ -207,7 +204,20 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
                 audioFile: `${audioFile.name} (${audioFile.size} bytes)`
             });
 
-            const result = await this.evaluatorApi.evaluateAudioAnswer(request).toPromise();
+            // Convert audio file to base64 for IPC transmission
+            const audioData = await this.audioFileToBase64(audioFile);
+            
+            // Use IPC service instead of direct HTTP
+            const ipcRequest = {
+                question: request.question,
+                role: request.role,
+                proficiencyLevel: request.proficiencyLevel,
+                questionType: request.questionType,
+                context: request.context,
+                audioData: audioData
+            };
+            
+            const result = await this.evaluatorIpc.evaluateAudioAnswer(ipcRequest);
             this.retryCount.set(0); // Reset retry count on success
             
             if (result) {
@@ -512,5 +522,22 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
             case 'FAIL': return 'danger';
             default: return 'info';
         }
+    }
+
+    private async audioFileToBase64(file: File): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                if (reader.result && typeof reader.result === 'string') {
+                    // Remove the data URL prefix to get just the base64 content
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                } else {
+                    reject(new Error('Failed to read audio file'));
+                }
+            };
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(file);
+        });
     }
 }

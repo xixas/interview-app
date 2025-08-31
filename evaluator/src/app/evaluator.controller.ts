@@ -122,12 +122,17 @@ export class EvaluatorController {
   async evaluateAudioAnswer(
     @UploadedFile() audioFile: Express.Multer.File,
     @Body() evaluateAudioDto: EvaluateAudioDto,
+    @Headers('x-openai-api-key') apiKey?: string,
   ): Promise<AudioEvaluationResult> {
     if (!audioFile) {
       throw new BadRequestException('Audio file is required');
     }
 
-    return this.evaluatorService.evaluateAudioAnswer(audioFile, evaluateAudioDto);
+    if (!apiKey) {
+      throw new BadRequestException('OpenAI API key is required. Please provide X-OpenAI-API-Key header.');
+    }
+
+    return this.evaluatorService.evaluateAudioAnswer(audioFile, evaluateAudioDto, apiKey);
   }
 
   @Get('demo')
@@ -228,11 +233,16 @@ export class EvaluatorController {
   @ApiResponse({ status: 500, description: 'Transcription failed' })
   async transcribeAudio(
     @UploadedFile() audioFile: Express.Multer.File,
+    @Headers('x-openai-api-key') apiKey?: string,
   ): Promise<{ text: string; duration?: number; language?: string }> {
     if (!audioFile) {
       throw new BadRequestException('Audio file is required');
     }
 
-    return this.evaluatorService.transcribeAudio(audioFile);
+    if (!apiKey) {
+      throw new BadRequestException('OpenAI API key is required. Please provide X-OpenAI-API-Key header.');
+    }
+
+    return this.evaluatorService.transcribeAudio(audioFile, apiKey);
   }
 }

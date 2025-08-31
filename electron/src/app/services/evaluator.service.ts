@@ -32,6 +32,15 @@ export interface TranscriptionResponse {
   duration?: number;
 }
 
+export interface AudioEvaluationRequest {
+  question: string;
+  role: string;
+  proficiencyLevel: string;
+  questionType: string;
+  context?: string;
+  audioData: string; // Base64 encoded audio data
+}
+
 export class EvaluatorService {
   private httpClient: AxiosInstance;
   private baseUrl: string;
@@ -124,6 +133,66 @@ export class EvaluatorService {
     } catch (error) {
       console.error('Evaluation failed:', error);
       throw error; // Don't fallback to mock - throw the actual error
+    }
+  }
+
+  async evaluateAudioAnswer(audioEvaluationData: AudioEvaluationRequest): Promise<EvaluationResponse> {
+    try {
+      // Get API key for the request - required for evaluation
+      const apiKey = await this.getApiKey();
+      if (!apiKey) {
+        throw new Error('OpenAI API key not configured. Please set your API key in Settings.');
+      }
+
+      // Check if the evaluator service is available
+      const isAvailable = await this.isServiceAvailable();
+      if (!isAvailable) {
+        throw new Error('AI Evaluator service is not available. Please check if the service is running.');
+      }
+
+      // Convert base64 audio data to Buffer for multipart upload
+      const audioBuffer = Buffer.from(audioEvaluationData.audioData, 'base64');
+      
+      // Create form data for multipart upload
+      const FormData = require('form-data');
+      const formData = new FormData();
+      
+      // Add the audio file (field name must be 'audio' to match backend FileInterceptor)
+      formData.append('audio', audioBuffer, {
+        filename: 'audio-recording.webm',
+        contentType: 'audio/webm'
+      });
+      
+      // Add other fields
+      formData.append('question', audioEvaluationData.question);
+      formData.append('role', audioEvaluationData.role);
+      formData.append('proficiencyLevel', audioEvaluationData.proficiencyLevel);
+      formData.append('questionType', audioEvaluationData.questionType);
+      if (audioEvaluationData.context) {
+        formData.append('context', audioEvaluationData.context);
+      }
+
+      const headers = { 
+        'X-OpenAI-API-Key': apiKey,
+        ...formData.getHeaders()
+      };
+
+      const response = await this.httpClient.post('/api/evaluator/evaluate-audio', formData, { headers });
+
+      return {
+        id: response.data.id || `eval_${Date.now()}`,
+        score: response.data.score || response.data.evaluation?.score || 0,
+        feedback: response.data.feedback || response.data.evaluation?.feedback || '',
+        strengths: response.data.strengths || response.data.evaluation?.strengths || [],
+        improvements: response.data.improvements || response.data.evaluation?.improvements || [],
+        technicalAccuracy: response.data.technicalAccuracy || response.data.evaluation?.technicalAccuracy || 0,
+        communication: response.data.communication || response.data.evaluation?.communication || 0,
+        completeness: response.data.completeness || response.data.evaluation?.completeness || 0,
+        timestamp: new Date(),
+      };
+    } catch (error) {
+      console.error('Audio evaluation failed:', error);
+      throw error;
     }
   }
 

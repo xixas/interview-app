@@ -295,7 +295,7 @@ IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is 
       
       // Add applicable criteria info for frontend display
       (result as any).applicableCriteria = Array.from(applicableCriteriaSet);
-      
+      console.log(JSON.stringify(result))
       return result;
     } catch (error) {
       this.logger.error('Failed to parse AI response:', error.message);
@@ -537,10 +537,15 @@ IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is 
     return nextSteps.slice(0, 3); // Return top 3 recommendations
   }
 
-  async transcribeAudio(audioFile: Express.Multer.File): Promise<TranscriptionInfo> {
-    if (!this.openai) {
-      throw new BadRequestException('OpenAI service not available. Please check API key configuration.');
+  async transcribeAudio(audioFile: Express.Multer.File, apiKey: string): Promise<TranscriptionInfo> {
+    if (!apiKey || !apiKey.trim()) {
+      throw new BadRequestException('OpenAI API key is required for audio transcription.');
     }
+
+    // Create OpenAI client with provided API key
+    const trimmedApiKey = apiKey.trim();
+    this.logger.log(`Creating OpenAI client for transcription with key starting with: ${trimmedApiKey.substring(0, 7)}...`);
+    const openai = new OpenAI({ apiKey: trimmedApiKey });
 
     try {
       this.logger.log(`Received audio file: ${audioFile.originalname}, mime: ${audioFile.mimetype}, size: ${audioFile.size}`);
@@ -555,10 +560,10 @@ IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is 
       const tempFilePath = path.join(tempDir, `audio_${Date.now()}_${audioFile.originalname}`);
       
       // Write the buffer to a temporary file
-      fs.writeFileSync(tempFilePath, audioFile.buffer);
+      fs.writeFileSync(tempFilePath, new Uint8Array(audioFile.buffer));
 
       // Transcribe using OpenAI Whisper
-      const transcription = await this.openai.audio.transcriptions.create({
+      const transcription = await openai.audio.transcriptions.create({
         file: fs.createReadStream(tempFilePath),
         model: 'whisper-1',
         language: 'en', // Can be made configurable
@@ -579,21 +584,22 @@ IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is 
     }
   }
 
-  async evaluateAudioAnswer(audioFile: Express.Multer.File, evaluateAudioDto: EvaluateAudioDto): Promise<AudioEvaluationResult> {
+  async evaluateAudioAnswer(audioFile: Express.Multer.File, evaluateAudioDto: EvaluateAudioDto, apiKey: string): Promise<AudioEvaluationResult> {
     try {
       this.logger.log('Starting comprehensive audio evaluation');
       
       // First, transcribe the audio to get the text content
-      const transcriptionResult = await this.transcribeAudio(audioFile);
+      const transcriptionResult = await this.transcribeAudio(audioFile, apiKey);
       
       // Perform direct audio analysis using AI
-      const audioAnalysis = await this.analyzeAudioDirectly(audioFile, transcriptionResult, evaluateAudioDto);
+      const audioAnalysis = await this.analyzeAudioDirectly(audioFile, transcriptionResult, evaluateAudioDto, apiKey);
       
       // Then evaluate the content and communication together
       const evaluation = await this.evaluateAudioWithContext(
         transcriptionResult,
         audioAnalysis,
-        evaluateAudioDto
+        evaluateAudioDto,
+        apiKey
       );
       
       return evaluation;
@@ -609,17 +615,22 @@ IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is 
   private async analyzeAudioDirectly(
     audioFile: Express.Multer.File,
     transcription: TranscriptionInfo,
-    evaluateAudioDto: EvaluateAudioDto
+    evaluateAudioDto: EvaluateAudioDto,
+    apiKey: string
   ): Promise<AudioAnalysisInfo> {
-    if (!this.openai) {
+    if (!apiKey || !apiKey.trim()) {
       // Return basic analysis based on transcription
       return this.createBasicAudioAnalysis(transcription);
     }
 
+    // Create OpenAI client with provided API key
+    const trimmedApiKey = apiKey.trim();
+    const openai = new OpenAI({ apiKey: trimmedApiKey });
+
     try {
       const audioAnalysisPrompt = this.buildAudioAnalysisPrompt(transcription, evaluateAudioDto);
       
-      const completion = await this.openai.chat.completions.create({
+      const completion = await openai.chat.completions.create({
         model: 'gpt-4',
         messages: [
           {
@@ -841,7 +852,8 @@ IMPORTANT: Be strict in detecting reading behavior. Look for these red flags:
   private async evaluateAudioWithContext(
     transcription: TranscriptionInfo,
     audioAnalysis: AudioAnalysisInfo,
-    evaluateAudioDto: EvaluateAudioDto
+    evaluateAudioDto: EvaluateAudioDto,
+    apiKey: string
   ): Promise<AudioEvaluationResult> {
     // Get base text evaluation
     const textEvaluateDto: EvaluateAnswerDto = {
@@ -853,7 +865,7 @@ IMPORTANT: Be strict in detecting reading behavior. Look for these red flags:
       context: evaluateAudioDto.context
     };
 
-    const baseEvaluation = await this.evaluateAnswer(textEvaluateDto);
+    const baseEvaluation = await this.evaluateAnswer(textEvaluateDto, apiKey);
     
     // Calculate audio-specific criteria
     const audioSpecificCriteria = this.calculateAudioCriteria(audioAnalysis, transcription.duration || 0);

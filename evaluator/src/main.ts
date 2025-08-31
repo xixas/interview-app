@@ -20,7 +20,7 @@ async function bootstrap() {
   app.enableCors({
     origin: ['http://localhost:3002', 'http://127.0.0.1:3002'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-OpenAI-API-Key'],
     credentials: false
   });
   

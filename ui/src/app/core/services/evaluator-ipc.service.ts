@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { EvaluationResult, AudioEvaluationResult } from '@interview-app/shared-interfaces';
 
 export interface EvaluationRequest {
   questionId: string | number;
@@ -9,17 +10,6 @@ export interface EvaluationRequest {
   timeSpent?: number;
 }
 
-export interface EvaluationResponse {
-  id: string;
-  score: number;
-  feedback: string;
-  strengths: string[];
-  improvements: string[];
-  technicalAccuracy: number;
-  communication: number;
-  completeness: number;
-  timestamp: Date;
-}
 
 export interface TranscriptionRequest {
   audioData: string; // Base64 encoded audio
@@ -30,6 +20,15 @@ export interface TranscriptionResponse {
   text: string;
   confidence: number;
   duration?: number;
+}
+
+export interface AudioEvaluationRequest {
+  question: string;
+  role: string;
+  proficiencyLevel: string;
+  questionType: string;
+  context?: string;
+  audioData: string; // Base64 encoded audio data
 }
 
 @Injectable({
@@ -59,7 +58,7 @@ export class EvaluatorIpcService {
     }
   }
 
-  async evaluateAnswer(evaluationData: EvaluationRequest): Promise<EvaluationResponse> {
+  async evaluateAnswer(evaluationData: EvaluationRequest): Promise<EvaluationResult> {
     if (!window.electronAPI?.evaluator) {
       throw new Error('Desktop mode is required for AI evaluation. Please use the desktop version of the app.');
     }
@@ -71,15 +70,15 @@ export class EvaluatorIpcService {
       }
 
       return {
-        id: result.data.id || `evaluation_${Date.now()}`,
-        score: result.data.score || 0,
-        feedback: result.data.feedback || '',
+        overallScore: result.data.overallScore || 0,
+        maxScore: result.data.maxScore || 100,
+        percentage: result.data.percentage || 0,
+        criteria: result.data.criteria || {},
         strengths: result.data.strengths || [],
         improvements: result.data.improvements || [],
-        technicalAccuracy: result.data.technicalAccuracy || 0,
-        communication: result.data.communication || 0,
-        completeness: result.data.completeness || 0,
-        timestamp: new Date(),
+        detailedFeedback: result.data.detailedFeedback || result.data.feedback || '',
+        recommendation: result.data.recommendation || 'FAIL',
+        nextSteps: result.data.nextSteps || [],
       };
     } catch (error) {
       console.error('Evaluation error:', error);
@@ -87,7 +86,36 @@ export class EvaluatorIpcService {
     }
   }
 
-  async batchEvaluateAnswers(evaluationuations: EvaluationRequest[]): Promise<EvaluationResponse[]> {
+  async evaluateAudioAnswer(evaluationData: AudioEvaluationRequest): Promise<AudioEvaluationResult> {
+    if (!window.electronAPI?.evaluator) {
+      throw new Error('Desktop mode is required for audio evaluation. Please use the desktop version of the app.');
+    }
+
+    try {
+      const result = await window.electronAPI.evaluator.evaluateAudioAnswer(evaluationData);
+      if (!result.success) {
+        throw new Error(result.error || 'Audio evaluation failed. Please check your OpenAI API key configuration.');
+      }
+
+      return {
+        overallScore: result.data.overallScore || 0,
+        maxScore: result.data.maxScore || 100,
+        percentage: result.data.percentage || 0,
+        criteria: result.data.criteria || {},
+        strengths: result.data.strengths || [],
+        improvements: result.data.improvements || [],
+        detailedFeedback: result.data.detailedFeedback || result.data.feedback || '',
+        recommendation: result.data.recommendation || 'FAIL',
+        nextSteps: result.data.nextSteps || [],
+        audioAnalysis: result.data.audioAnalysis,
+      };
+    } catch (error) {
+      console.error('Audio evaluation error:', error);
+      throw error;
+    }
+  }
+
+  async batchEvaluateAnswers(evaluationuations: EvaluationRequest[]): Promise<EvaluationResult[]> {
     if (!window.electronAPI?.evaluator) {
       throw new Error('Desktop mode is required for AI evaluation. Please use the desktop version of the app.');
     }

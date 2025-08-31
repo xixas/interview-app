@@ -13,6 +13,7 @@ declare global {
       evaluator: {
         transcribeAudio: (audioData: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         evaluateAnswer: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>;
+        evaluateAudioAnswer: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>;
         batchEvaluate: (evaluations: any[]) => Promise<{ success: boolean; data?: any[]; error?: string }>;
         generateSummary: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>;
         validateKey: () => Promise<{ success: boolean; valid?: boolean; message?: string; keyPreview?: string; error?: string }>;

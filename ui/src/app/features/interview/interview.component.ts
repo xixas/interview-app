@@ -521,15 +521,15 @@ export class InterviewComponent implements OnInit, OnDestroy {
             ? {
                 ...r,
                 aiAnalysis: {
-                  score: evaluation.score || 0,
+                  score: evaluation.overallScore || 0,
                   metrics: {
-                    technicalAccuracy: evaluation.technicalAccuracy || 0,
-                    communication: evaluation.communication || 0,
-                    completeness: evaluation.completeness || 0
+                    technicalAccuracy: evaluation.criteria?.technicalAccuracy || 0,
+                    communication: evaluation.criteria?.communication || 0,
+                    completeness: evaluation.criteria?.completeness || 0
                   },
                   strengths: evaluation.strengths || [],
                   improvements: evaluation.improvements || [],
-                  feedback: evaluation.feedback || ''
+                  feedback: evaluation.detailedFeedback || ''
                 }
               }
             : r
