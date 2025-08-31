@@ -44,3 +44,75 @@ Thumbs.db
 .github/instructions/nx.instructions.md
 
 .angular
+
+# Developer documentation and guides (created for developer reference, not for repo)
+CLAUDE.md
+SESSION_CONTEXT.md
+IMPLEMENTATION_SUMMARY.md
+TESTING_GUIDE.md
+PLAYWRIGHT_TESTING_GUIDE.md
+DATABASE_MIGRATION.sql
+
+# AI assistant artifacts
+.claude/
+.serena/
+
+# Test screenshots and artifacts
+.playwright-mcp/
+*.png
+*.jpg
+*.jpeg
+screenshots/
+
+# Log files
+*.log
+error.log
+backend_logs.txt
+logs/
+
+# Environment files and API keys
+.env
+.env.local
+.env.production
+.env.development
+*.env
+**/secrets/**
+**/*secret*
+**/*key*
+**/*token*
+**/api_key*
+**/apikey*
+openai_key*
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+api/src/assets/*.db
+evaluator/src/assets/*.db
+electron/src/assets/*.db
+
+# Examples and backups
+examples/
+backup*/
+*backup*/
+
+# Additional build artifacts
+*.tsbuildinfo
+dist-electron/
+out/
+release/
+packaged/
+
+# Additional IDE files
+.cursor/
+*.swp
+*.swo
+*~
+.history/
+
+# Package manager artifacts
+.pnpm-debug.log*
+.yarn-integrity
+.npm/
+.verdaccio/
