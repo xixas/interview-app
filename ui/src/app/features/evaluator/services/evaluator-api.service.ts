@@ -29,13 +29,6 @@ export interface EvaluateAudioRequest {
   audioFile: File;
 }
 
-export interface DemoData {
-  sampleQuestion: string;
-  sampleAnswer: string;
-  availableRoles: string[];
-  availableProficiencyLevels: string[];
-  questionTypes: string[];
-}
 
 @Injectable({
   providedIn: 'root',
@@ -101,15 +94,6 @@ export class EvaluatorApiService {
     );
   }
 
-  getDemoData(): Observable<DemoData> {
-    return this.http.get<DemoData>(`${this.baseUrl}/demo`)
-      .pipe(
-        catchError(error => {
-          console.error('Error fetching demo data:', error);
-          throw error;
-        })
-      );
-  }
 
   healthCheck(): Observable<{ status: string; timestamp: string }> {
     return this.http.get<{ status: string; timestamp: string }>(`${this.baseUrl}/health`)

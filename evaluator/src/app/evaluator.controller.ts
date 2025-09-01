@@ -135,24 +135,6 @@ export class EvaluatorController {
     return this.evaluatorService.evaluateAudioAnswer(audioFile, evaluateAudioDto, apiKey);
   }
 
-  @Get('demo')
-  @ApiOperation({ 
-    summary: 'Get demo evaluation data',
-    description: 'Returns sample data for testing the evaluator UI'
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Demo data returned successfully',
-  })
-  getDemoData(): any {
-    return {
-      sampleQuestion: 'Explain the difference between var, let, and const in JavaScript.',
-      sampleAnswer: 'var is function-scoped and can be redeclared, let is block-scoped and cannot be redeclared in the same scope, and const is also block-scoped but cannot be reassigned after declaration. const is used for values that should not change, while let is used for variables that may be reassigned.',
-      availableRoles: ['frontend', 'backend', 'fullstack', 'devops', 'mobile', 'data-science', 'qa'],
-      availableProficiencyLevels: ['junior', 'mid', 'senior', 'lead'],
-      questionTypes: ['technical', 'behavioral', 'system-design', 'coding'],
-    };
-  }
 
   @Get('validate-key')
   @ApiOperation({ 
