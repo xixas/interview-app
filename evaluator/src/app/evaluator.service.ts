@@ -54,6 +54,9 @@ export class EvaluatorService {
       
       const prompt = this.buildEvaluationPrompt(dto, applicableCriteria);
       
+      this.logger.log('=== OPENAI PROMPT ===');
+      this.logger.log(prompt);
+      
       this.logger.log('Making request to OpenAI API...');
       const completion = await openai.chat.completions.create({
         model: 'gpt-4',
@@ -76,6 +79,9 @@ export class EvaluatorService {
         throw new Error('No response from AI');
       }
 
+      this.logger.log('=== OPENAI RESPONSE ===');
+      this.logger.log(aiResponse);
+      
       this.logger.log('AI evaluation completed, parsing response...');
       return this.parseAIResponse(aiResponse, dto, applicableCriteria);
     } catch (error) {
@@ -299,86 +305,10 @@ IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is 
       return result;
     } catch (error) {
       this.logger.error('Failed to parse AI response:', error.message);
-      this.logger.log('Falling back to mock evaluation');
-      return this.createMockEvaluation(dto);
+      throw new Error(`AI evaluation failed: ${error.message}`);
     }
   }
 
-  private createMockEvaluation(dto: EvaluateAnswerDto): EvaluationResult {
-    const applicableCriteria = this.getApplicableCriteria(dto.questionType, dto.question);
-    const applicableCriteriaSet = new Set(applicableCriteria);
-    // Create realistic mock evaluation based on answer length and keywords
-    const answerLength = dto.answer.length;
-    const hasCodeExamples = dto.answer.includes('function') || dto.answer.includes('=>') || dto.answer.includes('class');
-    const mentionsBestPractices = dto.answer.toLowerCase().includes('best practice') || 
-                                  dto.answer.toLowerCase().includes('optimize') ||
-                                  dto.answer.toLowerCase().includes('performance');
-
-    // Base scores adjusted by proficiency level
-    const baseScores = this.getBaseScores(dto.proficiencyLevel);
-    
-    // Adjust scores based on answer quality indicators
-    const lengthBonus = Math.min(answerLength / 100, 2); // Up to 2 points for longer answers
-    const codeBonus = hasCodeExamples ? 1 : 0;
-    const practicesBonus = mentionsBestPractices ? 1 : 0;
-
-    // Only include applicable criteria in the criteria object
-    const criteria: Partial<EvaluationCriteria> = {};
-    let totalScore = 0;
-    let criteriaCount = 0;
-
-    if (applicableCriteriaSet.has('technicalAccuracy')) {
-      criteria.technicalAccuracy = Math.min(10, baseScores.technical + lengthBonus + codeBonus);
-      totalScore += criteria.technicalAccuracy;
-      criteriaCount++;
-    }
-    if (applicableCriteriaSet.has('clarity')) {
-      criteria.clarity = Math.min(10, baseScores.clarity + (answerLength > 200 ? 1 : 0));
-      totalScore += criteria.clarity;
-      criteriaCount++;
-    }
-    if (applicableCriteriaSet.has('completeness')) {
-      criteria.completeness = Math.min(10, baseScores.completeness + lengthBonus);
-      totalScore += criteria.completeness;
-      criteriaCount++;
-    }
-    if (applicableCriteriaSet.has('problemSolving')) {
-      criteria.problemSolving = Math.min(10, baseScores.problemSolving + codeBonus + practicesBonus);
-      totalScore += criteria.problemSolving;
-      criteriaCount++;
-    }
-    if (applicableCriteriaSet.has('communication')) {
-      criteria.communication = Math.min(10, baseScores.communication + (answerLength > 150 ? 1 : 0));
-      totalScore += criteria.communication;
-      criteriaCount++;
-    }
-    if (applicableCriteriaSet.has('bestPractices')) {
-      criteria.bestPractices = Math.min(10, baseScores.bestPractices + practicesBonus + codeBonus);
-      totalScore += criteria.bestPractices;
-      criteriaCount++;
-    }
-    
-    const maxScore = criteriaCount * 10;
-    const percentage = Math.round((totalScore / maxScore) * 100);
-
-    const result = {
-      overallScore: totalScore,
-      maxScore,
-      percentage,
-      criteria,
-      criteriaFeedback: this.generateCriteriaFeedback(criteria as EvaluationCriteria, applicableCriteriaSet),
-      strengths: this.generateStrengths(dto, criteria as EvaluationCriteria),
-      improvements: this.generateImprovements(dto, criteria as EvaluationCriteria),
-      detailedFeedback: this.generateDetailedFeedback(dto, criteria as EvaluationCriteria, percentage),
-      recommendation: this.getRecommendation(percentage),
-      nextSteps: this.generateNextSteps(dto, criteria as EvaluationCriteria),
-    };
-    
-    // Add applicable criteria info for frontend display
-    (result as any).applicableCriteria = Array.from(applicableCriteriaSet);
-    
-    return result;
-  }
 
   private getProficiencyExpectations(level: ProficiencyLevel): string {
     const expectations = {
@@ -403,139 +333,11 @@ IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is 
     return criteria[role];
   }
 
-  private getBaseScores(level: ProficiencyLevel): Record<string, number> {
-    const scores = {
-      [ProficiencyLevel.JUNIOR]: { technical: 5, clarity: 6, completeness: 5, problemSolving: 5, communication: 6, bestPractices: 4 },
-      [ProficiencyLevel.MID]: { technical: 6, clarity: 7, completeness: 6, problemSolving: 7, communication: 7, bestPractices: 6 },
-      [ProficiencyLevel.SENIOR]: { technical: 8, clarity: 8, completeness: 7, problemSolving: 8, communication: 8, bestPractices: 8 },
-      [ProficiencyLevel.LEAD]: { technical: 9, clarity: 9, completeness: 8, problemSolving: 9, communication: 9, bestPractices: 9 },
-    };
-    return scores[level];
-  }
 
-  private generateStrengths(dto: EvaluateAnswerDto, criteria: EvaluationCriteria): string[] {
-    const strengths = [];
-    if (criteria.technicalAccuracy && criteria.technicalAccuracy >= 7) strengths.push('Solid technical understanding demonstrated');
-    if (criteria.clarity && criteria.clarity >= 7) strengths.push('Clear and well-structured explanation');
-    if (criteria.communication && criteria.communication >= 7) strengths.push('Good communication skills');
-    if (dto.answer.length > 300) strengths.push('Comprehensive and detailed response');
-    if (dto.answer.includes('example') || dto.answer.includes('instance')) strengths.push('Provided relevant examples');
-    
-    return strengths.length ? strengths : ['Shows understanding of the topic'];
-  }
 
-  private generateImprovements(dto: EvaluateAnswerDto, criteria: EvaluationCriteria): string[] {
-    const improvements = [];
-    if (criteria.technicalAccuracy && criteria.technicalAccuracy < 7) improvements.push('Strengthen technical knowledge in this area');
-    if (criteria.bestPractices && criteria.bestPractices < 7) improvements.push('Consider industry best practices and standards');
-    if (criteria.completeness && criteria.completeness < 7) improvements.push('Provide more comprehensive coverage of the topic');
-    if (dto.answer.length < 150) improvements.push('Expand on key points with more detail');
-    
-    return improvements.length ? improvements : ['Continue practicing technical communication'];
-  }
 
-  private generateDetailedFeedback(dto: EvaluateAnswerDto, criteria: EvaluationCriteria, percentage: number): string {
-    const level = dto.proficiencyLevel;
-    const role = dto.role;
-    
-    let feedback = `This answer demonstrates a ${percentage >= 80 ? 'strong' : percentage >= 60 ? 'good' : 'basic'} understanding for a ${level} ${role} position. `;
-    
-    if (percentage >= 80) {
-      feedback += 'The response shows excellent technical depth and communication skills. ';
-    } else if (percentage >= 60) {
-      feedback += 'The response covers key concepts but could benefit from more depth in certain areas. ';
-    } else {
-      feedback += 'The response shows foundational knowledge but needs strengthening in several areas. ';
-    }
 
-    const applicableCriteriaCount = Object.keys(criteria).filter(key => criteria[key] > 0).length;
-    feedback += `Evaluated based on ${applicableCriteriaCount} applicable criteria for this question type. `;
-    
-    if (criteria.technicalAccuracy) feedback += `Technical accuracy: ${criteria.technicalAccuracy}/10. `;
-    if (criteria.clarity) feedback += `Clarity: ${criteria.clarity}/10. `;
-    if (criteria.completeness) feedback += `Completeness: ${criteria.completeness}/10. `;
-    if (criteria.communication) feedback += `Communication: ${criteria.communication}/10. `;
 
-    return feedback;
-  }
-
-  private getRecommendation(percentage: number): 'PASS' | 'CONDITIONAL' | 'FAIL' {
-    if (percentage >= 75) return 'PASS';
-    if (percentage >= 60) return 'CONDITIONAL';
-    return 'FAIL';
-  }
-
-  private generateCriteriaFeedback(criteria: EvaluationCriteria, applicableCriteriaSet: Set<string>): Record<string, string> {
-    const feedback: Record<string, string> = {};
-    
-    if (applicableCriteriaSet.has('technicalAccuracy')) {
-      const score = criteria.technicalAccuracy;
-      if (score >= 8) feedback.technicalAccuracy = `Excellent technical knowledge demonstrated (${score}/10)`;
-      else if (score >= 6) feedback.technicalAccuracy = `Good technical understanding with some gaps (${score}/10)`;
-      else feedback.technicalAccuracy = `Technical accuracy needs improvement - consider reviewing core concepts (${score}/10)`;
-    }
-    
-    if (applicableCriteriaSet.has('clarity')) {
-      const score = criteria.clarity;
-      if (score >= 8) feedback.clarity = `Very clear and well-structured explanation (${score}/10)`;
-      else if (score >= 6) feedback.clarity = `Generally clear but could be more organized (${score}/10)`;
-      else feedback.clarity = `Explanation lacks clarity - work on structuring thoughts better (${score}/10)`;
-    }
-    
-    if (applicableCriteriaSet.has('completeness')) {
-      const score = criteria.completeness;
-      if (score >= 8) feedback.completeness = `Comprehensive answer covering all key aspects (${score}/10)`;
-      else if (score >= 6) feedback.completeness = `Covers main points but missing some details (${score}/10)`;
-      else feedback.completeness = `Answer is incomplete - several important aspects not covered (${score}/10)`;
-    }
-    
-    if (applicableCriteriaSet.has('problemSolving')) {
-      const score = criteria.problemSolving;
-      if (score >= 8) feedback.problemSolving = `Strong analytical approach and problem-solving methodology (${score}/10)`;
-      else if (score >= 6) feedback.problemSolving = `Decent problem-solving approach with room for improvement (${score}/10)`;
-      else feedback.problemSolving = `Problem-solving approach needs strengthening - consider more systematic thinking (${score}/10)`;
-    }
-    
-    if (applicableCriteriaSet.has('communication')) {
-      const score = criteria.communication;
-      if (score >= 8) feedback.communication = `Excellent communication skills and professional presentation (${score}/10)`;
-      else if (score >= 6) feedback.communication = `Good communication with minor areas for improvement (${score}/10)`;
-      else feedback.communication = `Communication skills need development - work on clarity and flow (${score}/10)`;
-    }
-    
-    if (applicableCriteriaSet.has('bestPractices')) {
-      const score = criteria.bestPractices;
-      if (score >= 8) feedback.bestPractices = `Strong knowledge of industry best practices and standards (${score}/10)`;
-      else if (score >= 6) feedback.bestPractices = `Some awareness of best practices but could be stronger (${score}/10)`;
-      else feedback.bestPractices = `Limited knowledge of best practices - review industry standards (${score}/10)`;
-    }
-    
-    return feedback;
-  }
-
-  private generateNextSteps(dto: EvaluateAnswerDto, criteria: EvaluationCriteria): string[] {
-    const nextSteps = [];
-    
-    if (criteria.technicalAccuracy && criteria.technicalAccuracy < 7) {
-      nextSteps.push(`Study core ${dto.role} concepts and fundamentals`);
-    }
-    
-    if (criteria.bestPractices && criteria.bestPractices < 7) {
-      nextSteps.push('Review industry best practices and coding standards');
-    }
-    
-    if (criteria.problemSolving && criteria.problemSolving < 7) {
-      nextSteps.push('Practice problem-solving with coding challenges');
-    }
-    
-    if (dto.proficiencyLevel === ProficiencyLevel.SENIOR || dto.proficiencyLevel === ProficiencyLevel.LEAD) {
-      nextSteps.push('Focus on system design and architectural patterns');
-    }
-    
-    nextSteps.push('Continue practicing technical interview questions');
-    
-    return nextSteps.slice(0, 3); // Return top 3 recommendations
-  }
 
   async transcribeAudio(audioFile: Express.Multer.File, apiKey: string): Promise<TranscriptionInfo> {
     if (!apiKey || !apiKey.trim()) {
@@ -586,10 +388,22 @@ IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is 
 
   async evaluateAudioAnswer(audioFile: Express.Multer.File, evaluateAudioDto: EvaluateAudioDto, apiKey: string): Promise<AudioEvaluationResult> {
     try {
-      this.logger.log('Starting comprehensive audio evaluation');
+      this.logger.log('=== BACKEND EVALUATOR - AUDIO EVALUATION STARTED ===');
+      this.logger.log(`Question: "${evaluateAudioDto.question}"`);
+      this.logger.log(`Role: ${evaluateAudioDto.role}`);
+      this.logger.log(`Proficiency Level: ${evaluateAudioDto.proficiencyLevel}`);
+      this.logger.log(`Question Type: ${evaluateAudioDto.questionType}`);
+      this.logger.log(`Context: ${evaluateAudioDto.context || 'None'}`);
+      this.logger.log(`Audio File: ${audioFile.originalname}, Size: ${audioFile.size} bytes`);
       
       // First, transcribe the audio to get the text content
       const transcriptionResult = await this.transcribeAudio(audioFile, apiKey);
+      
+      this.logger.log('=== TRANSCRIPTION RESULT ===');
+      this.logger.log(`Transcribed Text: "${transcriptionResult.text}"`);
+      this.logger.log(`Duration: ${transcriptionResult.duration}s`);
+      this.logger.log(`Language: ${transcriptionResult.language}`);
+      
       
       // Perform direct audio analysis using AI
       const audioAnalysis = await this.analyzeAudioDirectly(audioFile, transcriptionResult, evaluateAudioDto, apiKey);
@@ -601,6 +415,23 @@ IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is 
         evaluateAudioDto,
         apiKey
       );
+      
+      this.logger.log('=== FINAL EVALUATION RESULT ===');
+      this.logger.log(`QUESTION: "${evaluateAudioDto.question}"`);
+      this.logger.log(`CANDIDATE'S ANSWER: "${transcriptionResult.text}"`);
+      this.logger.log(`OVERALL SCORE: ${evaluation.overallScore}/${evaluation.maxScore} (${evaluation.percentage}%)`);
+      this.logger.log(`RECOMMENDATION: ${evaluation.recommendation}`);
+      this.logger.log('CRITERIA SCORES:', JSON.stringify(evaluation.criteria, null, 2));
+      this.logger.log('STRENGTHS:', evaluation.strengths);
+      this.logger.log('IMPROVEMENTS (What was missing):', evaluation.improvements);
+      this.logger.log(`DETAILED FEEDBACK: "${evaluation.detailedFeedback}"`);
+      this.logger.log('AUDIO ANALYSIS:', JSON.stringify({
+        speakingRate: audioAnalysis.speakingRate,
+        fillerWordCount: audioAnalysis.fillerWordCount,
+        pauseCount: audioAnalysis.pauseCount,
+        readingDetected: audioAnalysis.readingAnomalies?.isLikelyReading,
+        naturalityScore: audioAnalysis.readingAnomalies?.naturalityScore
+      }, null, 2));
       
       return evaluation;
     } catch (error) {
@@ -919,7 +750,7 @@ IMPORTANT: Be strict in detecting reading behavior. Look for these red flags:
       strengths: enhancedFeedback.strengths,
       improvements: enhancedFeedback.improvements,
       detailedFeedback: enhancedFeedback.detailedFeedback,
-      recommendation: this.getRecommendation(percentage),
+      recommendation: percentage >= 75 ? 'PASS' : percentage >= 60 ? 'CONDITIONAL' : 'FAIL',
       nextSteps: enhancedFeedback.nextSteps,
       transcription,
       audioAnalysis

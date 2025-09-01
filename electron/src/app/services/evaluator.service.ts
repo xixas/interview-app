@@ -10,15 +10,34 @@ export interface EvaluationRequest {
 }
 
 export interface EvaluationResponse {
-  id: string;
-  score: number;
-  feedback: string;
+  overallScore: number;
+  maxScore: number;
+  percentage: number;
+  criteria: {
+    technicalAccuracy?: number;
+    clarity?: number;
+    completeness?: number;
+    problemSolving?: number;
+    communication?: number;
+    bestPractices?: number;
+    speakingPace?: number;
+    confidence?: number;
+    articulation?: number;
+    professionalPresence?: number;
+  };
+  criteriaFeedback?: Record<string, string>;
   strengths: string[];
   improvements: string[];
-  technicalAccuracy: number;
-  communication: number;
-  completeness: number;
-  timestamp: Date;
+  detailedFeedback: string;
+  recommendation: 'PASS' | 'CONDITIONAL' | 'FAIL';
+  nextSteps: string[];
+  transcription?: {
+    text: string;
+    duration?: number;
+    language?: string;
+  };
+  audioAnalysis?: any;
+  applicableCriteria?: string[];
 }
 
 export interface TranscriptionRequest {
@@ -119,25 +138,24 @@ export class EvaluatorService {
       const headers = { 'X-OpenAI-API-Key': apiKey };
       const response = await this.httpClient.post('/api/evaluator/evaluate', evaluationData, { headers });
 
-      return {
-        id: response.data.id || `eval_${Date.now()}`,
-        score: response.data.score || response.data.evaluation?.score || 0,
-        feedback: response.data.feedback || response.data.evaluation?.feedback || '',
-        strengths: response.data.strengths || response.data.evaluation?.strengths || [],
-        improvements: response.data.improvements || response.data.evaluation?.improvements || [],
-        technicalAccuracy: response.data.technicalAccuracy || response.data.evaluation?.technicalAccuracy || 0,
-        communication: response.data.communication || response.data.evaluation?.communication || 0,
-        completeness: response.data.completeness || response.data.evaluation?.completeness || 0,
-        timestamp: new Date(),
-      };
+      // Return the response data directly without transformation
+      return response.data;
     } catch (error) {
       console.error('Evaluation failed:', error);
-      throw error; // Don't fallback to mock - throw the actual error
+      throw error;
     }
   }
 
   async evaluateAudioAnswer(audioEvaluationData: AudioEvaluationRequest): Promise<EvaluationResponse> {
     try {
+      console.log('=== ELECTRON SERVICE - AUDIO EVALUATION REQUEST ===');
+      console.log('Question:', audioEvaluationData.question);
+      console.log('Role:', audioEvaluationData.role);
+      console.log('Proficiency Level:', audioEvaluationData.proficiencyLevel);
+      console.log('Question Type:', audioEvaluationData.questionType);
+      console.log('Context:', audioEvaluationData.context);
+      console.log('Audio Data Length:', audioEvaluationData.audioData?.length);
+      
       // Get API key for the request - required for evaluation
       const apiKey = await this.getApiKey();
       if (!apiKey) {
@@ -177,19 +195,18 @@ export class EvaluatorService {
         ...formData.getHeaders()
       };
 
+      console.log('=== ELECTRON SERVICE - SENDING TO BACKEND ===');
+      console.log('URL:', `${this.baseUrl}/api/evaluator/evaluate-audio`);
+      console.log('Headers:', { 'X-OpenAI-API-Key': `${apiKey.substring(0, 10)}...` });
+      
       const response = await this.httpClient.post('/api/evaluator/evaluate-audio', formData, { headers });
 
-      return {
-        id: response.data.id || `eval_${Date.now()}`,
-        score: response.data.score || response.data.evaluation?.score || 0,
-        feedback: response.data.feedback || response.data.evaluation?.feedback || '',
-        strengths: response.data.strengths || response.data.evaluation?.strengths || [],
-        improvements: response.data.improvements || response.data.evaluation?.improvements || [],
-        technicalAccuracy: response.data.technicalAccuracy || response.data.evaluation?.technicalAccuracy || 0,
-        communication: response.data.communication || response.data.evaluation?.communication || 0,
-        completeness: response.data.completeness || response.data.evaluation?.completeness || 0,
-        timestamp: new Date(),
-      };
+      console.log('=== ELECTRON SERVICE - BACKEND RESPONSE ===');
+      console.log('Status:', response.status);
+      console.log('Response Data:', JSON.stringify(response.data, null, 2));
+      
+      // Return the response data directly without transformation
+      return response.data;
     } catch (error) {
       console.error('Audio evaluation failed:', error);
       throw error;
@@ -237,7 +254,7 @@ export class EvaluatorService {
       const response = await this.httpClient.get('/api/evaluator/health', { timeout: 5000 });
       return response.status === 200;
     } catch (error) {
-      console.log('Evaluator service not available, using mock data');
+      console.log('Evaluator service not available');
       return false;
     }
   }

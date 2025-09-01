@@ -243,126 +243,595 @@
       } @else {
         <!-- Results Display -->
         <div class="card-header">
-          <div class="flex justify-between items-center">
+          <div class="flex justify-between items-start">
             <div>
-              <h3 class="text-surface-900 dark:text-surface-0 font-medium mb-4">AI Evaluation Results</h3>
-              <p>Detailed feedback and scoring from AI analysis</p>
+              <h3 class="text-surface-900 dark:text-surface-0 font-medium mb-2">AI Evaluation Results</h3>
+              <p class="text-muted-color text-sm mb-0">Detailed feedback and scoring from AI analysis</p>
             </div>
             <div class="flex items-center gap-2">
-              <p-tag 
-                [value]="evaluation()!.percentage + '%'"
-                [severity]="getScoreSeverity(evaluation()!.percentage)">
-              </p-tag>
-              <span class="text-xs text-muted-color">
-                {{ evaluation()!.overallScore }}/{{ evaluation()!.maxScore }}
-              </span>
+              <p-button 
+                label="Try Again"
+                icon="pi pi-refresh"
+                size="small"
+                severity="secondary"
+                outlined
+                (onClick)="evaluateAnswer()"
+                [loading]="isEvaluating()"
+                pTooltip="Evaluate this recording again">
+              </p-button>
+              <p-button 
+                label="New Question"
+                icon="pi pi-plus"
+                size="small"
+                severity="primary"
+                outlined
+                (onClick)="resetForm()"
+                pTooltip="Start with a new question">
+              </p-button>
             </div>
           </div>
         </div>
 
-        <div class="flex flex-col gap-4">
-          <!-- Recommendation Badge -->
-          <div class="text-center">
+        <div class="space-y-6">
+          <!-- Question and Answer Review Section -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Original Question -->
+            <div class="p-4 bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 border-round">
+              <div class="font-semibold mb-3 flex items-center gap-2 text-surface-900 dark:text-surface-0">
+                <i class="pi pi-question-circle text-blue-600"></i>
+                Interview Question
+              </div>
+              <p class="text-sm leading-6 m-0 text-surface-700 dark:text-surface-300">
+                {{ interviewQuestion }}
+              </p>
+            </div>
+
+            <!-- Candidate's Answer -->
+            @if (audioEvaluation?.transcription?.text) {
+              <div class="p-4 bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 border-round">
+                <div class="font-semibold mb-3 flex items-center gap-2 text-surface-900 dark:text-surface-0">
+                  <i class="pi pi-microphone text-green-600"></i>
+                  Your Answer (Transcribed)
+                </div>
+                <p class="text-sm leading-6 m-0 text-surface-700 dark:text-surface-300">
+                  {{ audioEvaluation?.transcription?.text }}
+                </p>
+                @if (audioEvaluation?.transcription?.duration) {
+                  <div class="mt-2 text-xs text-muted-color">
+                    Duration: {{ audioEvaluation?.transcription?.duration | number:'1.1-1' }}s
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="p-4 bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 border-round">
+                <div class="font-semibold mb-3 flex items-center gap-2 text-surface-900 dark:text-surface-0">
+                  <i class="pi pi-file-edit text-green-600"></i>
+                  Your Answer (Text)
+                </div>
+                <p class="text-sm leading-6 m-0 text-surface-700 dark:text-surface-300">
+                  {{ answer }}
+                </p>
+              </div>
+            }
+          </div>
+
+          <!-- Overall Score Section -->
+          <div class="text-center p-6 border-round" [class]="getScoreBackgroundClass(evaluation()!.percentage)">
+            <!-- Score Ring Visual -->
+            <div class="relative inline-block mb-4">
+              <div class="w-32 h-32 mx-auto relative">
+                <!-- Background Circle -->
+                <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="40" stroke="currentColor" stroke-width="8" fill="none" 
+                          class="text-surface-200 dark:text-surface-700"></circle>
+                  <!-- Progress Circle -->
+                  <circle cx="50" cy="50" r="40" stroke="currentColor" stroke-width="8" fill="none"
+                          [attr.stroke-dasharray]="251.2"
+                          [attr.stroke-dashoffset]="251.2 - (evaluation()!.percentage * 2.512)"
+                          [class]="getScoreColorClass(evaluation()!.percentage)"
+                          stroke-linecap="round"
+                          class="transition-all duration-1000 ease-out"></circle>
+                </svg>
+                <!-- Score Text -->
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <div class="text-center">
+                    <div class="text-3xl font-bold" [class]="getScoreTextClass(evaluation()!.percentage)">
+                      {{ evaluation()!.percentage }}%
+                    </div>
+                    <div class="text-xs text-muted-color">
+                      {{ evaluation()!.overallScore }}/{{ evaluation()!.maxScore }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Score Context -->
+            <div class="mb-4">
+              <div class="text-sm font-medium mb-2" [class]="getScoreTextClass(evaluation()!.percentage)">
+                {{ getScoreLabel(evaluation()!.percentage) }}
+              </div>
+              <div class="text-xs text-muted-color">
+                {{ getScoreDescription(evaluation()!.percentage) }}
+              </div>
+            </div>
+            
+            <!-- Recommendation Badge -->
             <p-tag 
-              [value]="'Recommendation: ' + evaluation()!.recommendation"
+              [value]="evaluation()!.recommendation"
               [severity]="getRecommendationSeverity(evaluation()!.recommendation)"
-              class="text-base px-3 py-2">
+              class="text-base px-4 py-2">
             </p-tag>
+
+            <!-- Score Scale Reference -->
+            <div class="mt-4 pt-4 border-t border-surface-200 dark:border-surface-700">
+              <div class="text-xs text-muted-color mb-2">Score Scale</div>
+              <div class="flex justify-center items-center gap-4 text-xs">
+                <div class="flex items-center gap-1">
+                  <div class="w-3 h-3 bg-red-500 rounded-full"></div>
+                  <span>Below 40%</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <div class="w-3 h-3 bg-orange-500 rounded-full"></div>
+                  <span>40-69%</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <span>70%+</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Overall Feedback -->
-          <div class="surface-100 p-3 border-round">
-            <div class="font-semibold mb-2 flex items-center gap-2">
-              <i class="pi pi-comment text-primary"></i>
-              Overall Feedback
+          @if (evaluation()!.detailedFeedback) {
+            <div class="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 border-round">
+              <div class="font-semibold mb-3 flex items-center gap-2 text-blue-900 dark:text-blue-100">
+                <i class="pi pi-comment text-blue-600"></i>
+                Overall Feedback
+              </div>
+              <p class="text-sm leading-6 m-0 text-blue-800 dark:text-blue-200">
+                {{ evaluation()!.detailedFeedback }}
+              </p>
             </div>
-            <p class="text-sm leading-6 m-0">
-              {{ evaluation()!.detailedFeedback }}
-            </p>
-          </div>
+          }
 
           <!-- Detailed Scores -->
           @if (getCriteriaItems().length > 0) {
             <div>
-              <div class="font-semibold mb-3 flex items-center gap-2">
+              <div class="font-semibold mb-6 flex items-center gap-2 text-surface-900 dark:text-surface-0">
                 <i class="pi pi-chart-bar text-primary"></i>
-                Detailed Scoring
+                Detailed Scoring Breakdown
               </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                @for (criteriaItem of getCriteriaItems(); track criteriaItem.key) {
-                  <div class="flex flex-col gap-2">
-                    <div class="flex justify-between items-center">
-                      <span class="text-sm font-medium">
-                        {{ criteriaItem.label }}
+              
+              <!-- Group criteria by category -->
+              @for (group of getCriteriaGroups(); track group.name) {
+                <div class="mb-6">
+                  <div class="flex items-center gap-2 mb-4">
+                    <i [class]="group.icon" class="text-lg"></i>
+                    <h4 class="text-lg font-medium text-surface-900 dark:text-surface-0 m-0">{{ group.name }}</h4>
+                  </div>
+                  
+                  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    @for (criteriaItem of group.criteria; track criteriaItem.key) {
+                      <div class="p-4 border border-surface-200 dark:border-surface-700 border-round bg-surface-0 dark:bg-surface-800 hover:shadow-lg transition-all duration-200">
+                        <div class="flex justify-between items-center mb-3">
+                          <div class="flex items-center gap-2">
+                            <i [class]="criteriaItem.icon" [class]="getScoreColor(criteriaItem.score)"></i>
+                            <span class="font-semibold text-surface-900 dark:text-surface-0">
+                              {{ criteriaItem.label }}
+                            </span>
+                          </div>
+                          <div class="flex items-center gap-2">
+                            <span class="text-2xl font-bold" [class]="getScoreColor(criteriaItem.score)">
+                              {{ criteriaItem.score }}
+                            </span>
+                            <span class="text-sm text-muted-color">/10</span>
+                          </div>
+                        </div>
+                        <p-progressBar 
+                          [value]="criteriaItem.score * 10" 
+                          [showValue]="false"
+                          class="mb-3">
+                        </p-progressBar>
+                        @if (evaluation()!.criteriaFeedback && evaluation()!.criteriaFeedback![criteriaItem.key]) {
+                          <p class="text-sm text-muted-color m-0 leading-5">
+                            {{ evaluation()!.criteriaFeedback![criteriaItem.key] }}
+                          </p>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Scoring Rubric and Context -->
+          <div class="p-6 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 border-round">
+            <div class="text-center mb-6">
+              <div class="w-12 h-12 bg-purple-500 text-white rounded-full flex items-center justify-center mx-auto mb-3">
+                <i class="pi pi-info-circle text-xl"></i>
+              </div>
+              <h4 class="text-lg font-semibold text-purple-900 dark:text-purple-100 m-0">Understanding Your Scores</h4>
+              <p class="text-sm text-purple-700 dark:text-purple-300 mt-1">Learn how the AI evaluation system works</p>
+            </div>
+            
+            <div class="space-y-4">
+              <!-- Score Scale Guide -->
+              <div class="bg-white dark:bg-surface-900 border border-purple-200 dark:border-purple-700 border-round p-4">
+                <h5 class="font-semibold text-purple-900 dark:text-purple-100 mb-3 flex items-center gap-2">
+                  <i class="pi pi-star text-purple-600"></i>
+                  Score Scale Guide
+                </h5>
+                <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+                  <div class="text-center p-2 bg-red-100 dark:bg-red-900 border-round">
+                    <div class="font-bold text-red-700 dark:text-red-300">1-2</div>
+                    <div class="text-red-600">Poor</div>
+                  </div>
+                  <div class="text-center p-2 bg-orange-100 dark:bg-orange-900 border-round">
+                    <div class="font-bold text-orange-700 dark:text-orange-300">3-4</div>
+                    <div class="text-orange-600">Fair</div>
+                  </div>
+                  <div class="text-center p-2 bg-yellow-100 dark:bg-yellow-900 border-round">
+                    <div class="font-bold text-yellow-700 dark:text-yellow-300">5-6</div>
+                    <div class="text-yellow-600">Good</div>
+                  </div>
+                  <div class="text-center p-2 bg-blue-100 dark:bg-blue-900 border-round">
+                    <div class="font-bold text-blue-700 dark:text-blue-300">7-8</div>
+                    <div class="text-blue-600">Very Good</div>
+                  </div>
+                  <div class="text-center p-2 bg-green-100 dark:bg-green-900 border-round">
+                    <div class="font-bold text-green-700 dark:text-green-300">9-10</div>
+                    <div class="text-green-600">Excellent</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Evaluation Focus Areas -->
+              <div class="bg-white dark:bg-surface-900 border border-purple-200 dark:border-purple-700 border-round p-4">
+                <h5 class="font-semibold text-purple-900 dark:text-purple-100 mb-3 flex items-center gap-2">
+                  <i class="pi pi-list-check text-purple-600"></i>
+                  What We Evaluate
+                </h5>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div class="space-y-2">
+                    <div class="font-medium text-blue-600 flex items-center gap-2">
+                      <i class="pi pi-cog"></i>
+                      Technical Knowledge
+                    </div>
+                    <ul class="list-none p-0 space-y-1 text-xs text-muted-color">
+                      <li>• Accuracy of information</li>
+                      <li>• Depth of understanding</li>
+                      <li>• Best practices knowledge</li>
+                      <li>• Problem-solving approach</li>
+                    </ul>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="font-medium text-purple-600 flex items-center gap-2">
+                      <i class="pi pi-comments"></i>
+                      Communication
+                    </div>
+                    <ul class="list-none p-0 space-y-1 text-xs text-muted-color">
+                      <li>• Clarity of explanation</li>
+                      <li>• Logical structure</li>
+                      <li>• Professional language</li>
+                      <li>• Completeness of answer</li>
+                    </ul>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="font-medium text-green-600 flex items-center gap-2">
+                      <i class="pi pi-volume-up"></i>
+                      Speech Quality
+                    </div>
+                    <ul class="list-none p-0 space-y-1 text-xs text-muted-color">
+                      <li>• Speaking pace & rhythm</li>
+                      <li>• Confidence level</li>
+                      <li>• Articulation clarity</li>
+                      <li>• Professional presence</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tips for Improvement -->
+              <div class="bg-white dark:bg-surface-900 border border-purple-200 dark:border-purple-700 border-round p-4">
+                <h5 class="font-semibold text-purple-900 dark:text-purple-100 mb-3 flex items-center gap-2">
+                  <i class="pi pi-question text-purple-600"></i>
+                  Tips for Better Scores
+                </h5>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div class="font-medium text-green-600 mb-2">For Technical Questions:</div>
+                    <ul class="list-none p-0 space-y-1 text-xs text-muted-color">
+                      <li>• Be specific with examples</li>
+                      <li>• Mention real-world use cases</li>
+                      <li>• Discuss trade-offs and alternatives</li>
+                      <li>• Reference official documentation</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <div class="font-medium text-blue-600 mb-2">For Better Delivery:</div>
+                    <ul class="list-none p-0 space-y-1 text-xs text-muted-color">
+                      <li>• Speak at 140-180 words/min</li>
+                      <li>• Structure: intro → details → conclusion</li>
+                      <li>• Minimize filler words (um, ah)</li>
+                      <li>• Sound confident and natural</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Audio Analysis Section (only for audio evaluations) -->
+          @if (audioEvaluation) {
+            <div class="space-y-4">
+              <!-- Reading Detection Alert -->
+              @if (audioEvaluation!.audioAnalysis?.readingAnomalies?.isLikelyReading) {
+                <div class="p-4 bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-700 border-round">
+                  <div class="font-bold mb-2 flex items-center gap-2 text-red-900 dark:text-red-100">
+                    <i class="pi pi-exclamation-triangle text-red-600 text-lg"></i>
+                    READING DETECTED: Script Reading Detected
+                  </div>
+                  <p class="text-sm text-red-800 dark:text-red-200 mb-3 leading-5">
+                    {{ audioEvaluation!.audioAnalysis?.readingAnomalies?.explanation }}
+                  </p>
+                  <div class="mb-3">
+                    <span class="text-xs text-red-700 dark:text-red-300 font-medium">Naturalness Score: 
+                      <span class="font-bold">{{ audioEvaluation!.audioAnalysis?.readingAnomalies?.naturalityScore }}/10</span>
+                    </span>
+                    <p-progressBar 
+                      [value]="(audioEvaluation!.audioAnalysis?.readingAnomalies?.naturalityScore || 0) * 10" 
+                      [showValue]="false"
+                      styleClass="mt-2 h-2"
+                      class="block">
+                    </p-progressBar>
+                  </div>
+                  @if ((audioEvaluation!.audioAnalysis?.readingAnomalies?.readingIndicators?.length || 0) > 0) {
+                    <div>
+                      <p class="text-xs text-red-700 dark:text-red-300 font-medium mb-2">Reading Indicators:</p>
+                      <ul class="list-none p-0 m-0">
+                        @for (indicator of audioEvaluation!.audioAnalysis?.readingAnomalies?.readingIndicators || []; track indicator) {
+                          <li class="flex items-start gap-2 mb-1">
+                            <i class="pi pi-minus text-red-600 text-xs mt-1 flex-shrink-0"></i>
+                            <span class="text-xs text-red-800 dark:text-red-200">{{ indicator }}</span>
+                          </li>
+                        }
+                      </ul>
+                    </div>
+                  }
+                </div>
+              }
+
+              <!-- Enhanced Speech Analysis -->
+              <div class="p-6 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 border-round">
+                <div class="text-center mb-6">
+                  <div class="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="pi pi-volume-up text-xl"></i>
+                  </div>
+                  <h4 class="text-lg font-semibold text-blue-900 dark:text-blue-100 m-0">Speech Analysis</h4>
+                  <p class="text-sm text-blue-700 dark:text-blue-300 mt-1">Detailed analysis of your speaking patterns</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <!-- Speaking Rate Card -->
+                  <div class="p-4 bg-white dark:bg-surface-900 border border-blue-200 dark:border-blue-700 border-round">
+                    <div class="flex items-center gap-3 mb-3">
+                      <div class="w-10 h-10 bg-blue-100 dark:bg-blue-800 rounded-lg flex items-center justify-center">
+                        <i class="pi pi-clock text-blue-600"></i>
+                      </div>
+                      <div>
+                        <div class="font-semibold text-blue-900 dark:text-blue-100">Speaking Rate</div>
+                        <div class="text-xs text-muted-color">Words per minute</div>
+                      </div>
+                    </div>
+                    <div class="text-center">
+                      <div class="text-3xl font-bold text-blue-700 dark:text-blue-300 mb-2">
+                        {{ audioEvaluation!.audioAnalysis?.speakingRate || 0 }}
+                      </div>
+                      <div class="text-xs" [class]="getSpeakingRateStatus(audioEvaluation!.audioAnalysis?.speakingRate || 0).class">
+                        {{ getSpeakingRateStatus(audioEvaluation!.audioAnalysis?.speakingRate || 0).text }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Filler Words Card -->
+                  <div class="p-4 bg-white dark:bg-surface-900 border border-blue-200 dark:border-blue-700 border-round">
+                    <div class="flex items-center gap-3 mb-3">
+                      <div class="w-10 h-10 bg-orange-100 dark:bg-orange-800 rounded-lg flex items-center justify-center">
+                        <i class="pi pi-exclamation-circle text-orange-600"></i>
+                      </div>
+                      <div>
+                        <div class="font-semibold text-blue-900 dark:text-blue-100">Filler Words</div>
+                        <div class="text-xs text-muted-color">Um, ah, like, you know</div>
+                      </div>
+                    </div>
+                    <div class="text-center">
+                      <div class="text-3xl font-bold text-blue-700 dark:text-blue-300 mb-2">
+                        {{ audioEvaluation!.audioAnalysis?.fillerWordCount || 0 }}
+                      </div>
+                      <div class="text-xs" [class]="getFillerWordStatus(audioEvaluation!.audioAnalysis?.fillerWordCount || 0).class">
+                        {{ getFillerWordStatus(audioEvaluation!.audioAnalysis?.fillerWordCount || 0).text }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Pauses Card -->
+                  <div class="p-4 bg-white dark:bg-surface-900 border border-blue-200 dark:border-blue-700 border-round">
+                    <div class="flex items-center gap-3 mb-3">
+                      <div class="w-10 h-10 bg-purple-100 dark:bg-purple-800 rounded-lg flex items-center justify-center">
+                        <i class="pi pi-pause text-purple-600"></i>
+                      </div>
+                      <div>
+                        <div class="font-semibold text-blue-900 dark:text-blue-100">Pauses</div>
+                        <div class="text-xs text-muted-color">Thinking breaks</div>
+                      </div>
+                    </div>
+                    <div class="text-center">
+                      <div class="text-3xl font-bold text-blue-700 dark:text-blue-300 mb-2">
+                        {{ audioEvaluation!.audioAnalysis?.pauseCount || 0 }}
+                      </div>
+                      <div class="text-xs text-muted-color">
+                        Total pauses detected
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Average Pause Length Card -->
+                  <div class="p-4 bg-white dark:bg-surface-900 border border-blue-200 dark:border-blue-700 border-round">
+                    <div class="flex items-center gap-3 mb-3">
+                      <div class="w-10 h-10 bg-cyan-100 dark:bg-cyan-800 rounded-lg flex items-center justify-center">
+                        <i class="pi pi-stopwatch text-cyan-600"></i>
+                      </div>
+                      <div>
+                        <div class="font-semibold text-blue-900 dark:text-blue-100">Avg Pause</div>
+                        <div class="text-xs text-muted-color">Length in seconds</div>
+                      </div>
+                    </div>
+                    <div class="text-center">
+                      <div class="text-3xl font-bold text-blue-700 dark:text-blue-300 mb-2">
+                        {{ (audioEvaluation!.audioAnalysis?.averagePauseLength || 0) | number:'1.1-1' }}s
+                      </div>
+                      <div class="text-xs" [class]="getPauseStatus(audioEvaluation!.audioAnalysis?.averagePauseLength || 0).class">
+                        {{ getPauseStatus(audioEvaluation!.audioAnalysis?.averagePauseLength || 0).text }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Confidence Markers -->
+                @if ((audioEvaluation!.audioAnalysis?.confidenceMarkers?.length || 0) > 0) {
+                  <div class="mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
+                    <div class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                      <i class="pi pi-thumbs-up text-green-600 mr-2"></i>Confidence Indicators
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                      @for (marker of audioEvaluation!.audioAnalysis?.confidenceMarkers || []; track marker) {
+                        <span class="inline-block px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs rounded">
+                          {{ marker }}
+                        </span>
+                      }
+                    </div>
+                  </div>
+                }
+
+                <!-- Hesitation Markers -->
+                @if ((audioEvaluation!.audioAnalysis?.hesitationMarkers?.length || 0) > 0) {
+                  <div class="mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
+                    <div class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                      <i class="pi pi-exclamation-circle text-orange-600 mr-2"></i>Hesitation Patterns
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                      @for (marker of audioEvaluation!.audioAnalysis?.hesitationMarkers || []; track marker) {
+                        <span class="inline-block px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 text-xs rounded">
+                          {{ marker }}
+                        </span>
+                      }
+                    </div>
+                  </div>
+                }
+
+                <!-- Naturalness Score (if not already showing in reading alert) -->
+                @if (!audioEvaluation!.audioAnalysis?.readingAnomalies?.isLikelyReading && audioEvaluation!.audioAnalysis?.readingAnomalies?.naturalityScore) {
+                  <div class="mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
+                    <div class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                      <i class="pi pi-heart text-blue-600 mr-2"></i>Speech Naturalness
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <span class="text-lg font-semibold text-blue-700 dark:text-blue-300">
+                        {{ audioEvaluation!.audioAnalysis?.readingAnomalies?.naturalityScore }}/10
                       </span>
-                      <span class="text-sm font-semibold">
-                        {{ criteriaItem.score }}/10
+                      <div class="flex-1">
+                        <p-progressBar 
+                          [value]="(audioEvaluation!.audioAnalysis?.readingAnomalies?.naturalityScore || 0) * 10" 
+                          [showValue]="false"
+                          styleClass="h-3">
+                        </p-progressBar>
+                      </div>
+                      <span class="text-sm text-blue-600 dark:text-blue-400">
+                        {{ (audioEvaluation!.audioAnalysis?.readingAnomalies?.naturalityScore || 0) >= 8 ? 'Very Natural' : 
+                           (audioEvaluation!.audioAnalysis?.readingAnomalies?.naturalityScore || 0) >= 7 ? 'Natural' :
+                           (audioEvaluation!.audioAnalysis?.readingAnomalies?.naturalityScore || 0) >= 5 ? 'Somewhat Natural' : 
+                           'May Sound Scripted' }}
                       </span>
                     </div>
-                    <p-progressBar 
-                      [value]="criteriaItem.score * 10" 
-                      [showValue]="false"
-                      class="h-2">
-                    </p-progressBar>
                   </div>
                 }
               </div>
             </div>
-
-            <p-divider></p-divider>
           }
 
-          <!-- Strengths and Improvements -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            @if (evaluation()!.strengths.length > 0) {
-              <div>
-                <div class="font-semibold mb-3 flex items-center gap-2">
-                  <i class="pi pi-check-circle text-green-500"></i>
-                  Strengths
+          <!-- Enhanced Feedback Categories -->
+          <div class="space-y-6">
+            <div class="text-center">
+              <h3 class="text-xl font-semibold text-surface-900 dark:text-surface-0 mb-2">Interview Feedback Summary</h3>
+              <p class="text-sm text-muted-color">Detailed analysis of your performance</p>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <!-- What You Did Well -->
+              @if (evaluation()!.strengths.length > 0) {
+                <div class="relative overflow-hidden">
+                  <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600"></div>
+                  <div class="p-6 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 border-round">
+                    <div class="text-center mb-4">
+                      <div class="w-12 h-12 bg-green-500 text-white rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i class="pi pi-thumbs-up text-xl"></i>
+                      </div>
+                      <h4 class="text-lg font-semibold text-green-900 dark:text-green-100 m-0">What You Did Well</h4>
+                      <p class="text-sm text-green-700 dark:text-green-300 mt-1">Strengths demonstrated in your answer</p>
+                    </div>
+                    <div class="space-y-3">
+                      @for (strength of evaluation()!.strengths; track strength) {
+                        <div class="flex items-start gap-3 p-3 bg-green-100 dark:bg-green-900 border-round">
+                          <i class="pi pi-check text-green-600 text-sm mt-1 flex-shrink-0"></i>
+                          <span class="text-sm leading-5 text-green-800 dark:text-green-200">{{ strength }}</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
                 </div>
-                <ul class="list-none p-0 m-0">
-                  @for (strength of evaluation()!.strengths; track strength) {
-                    <li class="flex items-start gap-2 mb-2">
-                      <i class="pi pi-plus-circle text-green-500 text-xs mt-1"></i>
-                      <span class="text-sm leading-5">{{ strength }}</span>
-                    </li>
-                  }
-                </ul>
-              </div>
-            }
+              }
 
-            @if (evaluation()!.improvements.length > 0) {
-              <div>
-                <div class="font-semibold mb-3 flex items-center gap-2">
-                  <i class="pi pi-exclamation-triangle text-orange-500"></i>
-                  Areas for Improvement
+              <!-- What Was Missing -->
+              @if (evaluation()!.improvements.length > 0) {
+                <div class="relative overflow-hidden">
+                  <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-400 to-red-500"></div>
+                  <div class="p-6 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 border-round">
+                    <div class="text-center mb-4">
+                      <div class="w-12 h-12 bg-orange-500 text-white rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i class="pi pi-lightbulb text-xl"></i>
+                      </div>
+                      <h4 class="text-lg font-semibold text-orange-900 dark:text-orange-100 m-0">What Was Missing</h4>
+                      <p class="text-sm text-orange-700 dark:text-orange-300 mt-1">Areas to focus on for improvement</p>
+                    </div>
+                    <div class="space-y-3">
+                      @for (improvement of evaluation()!.improvements; track improvement) {
+                        <div class="flex items-start gap-3 p-3 bg-orange-100 dark:bg-orange-900 border-round">
+                          <i class="pi pi-arrow-up text-orange-600 text-sm mt-1 flex-shrink-0"></i>
+                          <span class="text-sm leading-5 text-orange-800 dark:text-orange-200">{{ improvement }}</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
                 </div>
-                <ul class="list-none p-0 m-0">
-                  @for (improvement of evaluation()!.improvements; track improvement) {
-                    <li class="flex items-start gap-2 mb-2">
-                      <i class="pi pi-arrow-circle-right text-orange-500 text-xs mt-1"></i>
-                      <span class="text-sm leading-5">{{ improvement }}</span>
-                    </li>
-                  }
-                </ul>
-              </div>
-            }
+              }
+            </div>
           </div>
 
           <!-- Next Steps -->
           @if (evaluation()!.nextSteps.length > 0) {
-            <p-divider></p-divider>
-            
-            <div>
-              <div class="font-semibold mb-3 flex items-center gap-2">
-                <i class="pi pi-forward text-blue-500"></i>
-                Next Steps
+            <div class="p-4 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 border-round">
+              <div class="font-semibold mb-3 flex items-center gap-2 text-purple-900 dark:text-purple-100">
+                <i class="pi pi-forward text-purple-600"></i>
+                Recommended Next Steps
               </div>
               <ul class="list-none p-0 m-0">
                 @for (step of evaluation()!.nextSteps; track step) {
-                  <li class="flex items-start gap-2 mb-2">
-                    <i class="pi pi-angle-double-right text-blue-500 text-xs mt-1"></i>
-                    <span class="text-sm leading-5">{{ step }}</span>
+                  <li class="flex items-start gap-3 mb-3 last:mb-0">
+                    <i class="pi pi-angle-double-right text-purple-600 text-sm mt-0.5 flex-shrink-0"></i>
+                    <span class="text-sm leading-5 text-purple-800 dark:text-purple-200">{{ step }}</span>
                   </li>
                 }
               </ul>

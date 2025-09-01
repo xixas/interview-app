@@ -1,0 +1,134 @@
+import { Component, ChangeDetectionStrategy, inject, effect } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { ToastModule } from 'primeng/toast';
+import { MessageService } from 'primeng/api';
+import { NotificationService } from '../../core/services/notification.service';
+
+@Component({
+  selector: 'app-global-toast',
+  standalone: true,
+  imports: [CommonModule, ToastModule],
+  providers: [MessageService],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <p-toast
+      key="global"
+      position="top-right"
+      [baseZIndex]="9999">
+    </p-toast>
+  `,
+  styles: [`
+    :host {
+      position: fixed;
+      top: 0;
+      right: 0;
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    ::ng-deep .p-toast {
+      pointer-events: auto;
+    }
+
+    ::ng-deep .p-toast .p-toast-message {
+      margin: 0 0 1rem 0;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+      border-radius: 8px;
+      border: 1px solid var(--surface-border);
+    }
+
+    ::ng-deep .p-toast .p-toast-message.p-toast-message-success {
+      background: var(--green-50);
+      border-color: var(--green-200);
+      color: var(--green-900);
+    }
+
+    ::ng-deep .p-toast .p-toast-message.p-toast-message-info {
+      background: var(--blue-50);
+      border-color: var(--blue-200);
+      color: var(--blue-900);
+    }
+
+    ::ng-deep .p-toast .p-toast-message.p-toast-message-warn {
+      background: var(--orange-50);
+      border-color: var(--orange-200);
+      color: var(--orange-900);
+    }
+
+    ::ng-deep .p-toast .p-toast-message.p-toast-message-error {
+      background: var(--red-50);
+      border-color: var(--red-200);
+      color: var(--red-900);
+    }
+
+    ::ng-deep .p-toast .p-toast-message .p-toast-message-content {
+      padding: 1rem;
+    }
+
+    ::ng-deep .p-toast .p-toast-message .p-toast-message-text {
+      margin-left: 0.5rem;
+    }
+
+    ::ng-deep .p-toast .p-toast-message .p-toast-summary {
+      font-weight: 600;
+      font-size: 0.875rem;
+    }
+
+    ::ng-deep .p-toast .p-toast-message .p-toast-detail {
+      font-size: 0.875rem;
+      margin-top: 0.25rem;
+      line-height: 1.4;
+    }
+
+    /* Dark mode adjustments */
+    :host-context(.dark) ::ng-deep .p-toast .p-toast-message.p-toast-message-success {
+      background: var(--green-950);
+      border-color: var(--green-800);
+      color: var(--green-100);
+    }
+
+    :host-context(.dark) ::ng-deep .p-toast .p-toast-message.p-toast-message-info {
+      background: var(--blue-950);
+      border-color: var(--blue-800);
+      color: var(--blue-100);
+    }
+
+    :host-context(.dark) ::ng-deep .p-toast .p-toast-message.p-toast-message-warn {
+      background: var(--orange-950);
+      border-color: var(--orange-800);
+      color: var(--orange-100);
+    }
+
+    :host-context(.dark) ::ng-deep .p-toast .p-toast-message.p-toast-message-error {
+      background: var(--red-950);
+      border-color: var(--red-800);
+      color: var(--red-100);
+    }
+  `]
+})
+export class GlobalToastComponent {
+  private readonly notificationService = inject(NotificationService);
+  private readonly messageService = inject(MessageService);
+
+  constructor() {
+    // Sync NotificationService with PrimeNG MessageService
+    effect(() => {
+      const notifications = this.notificationService.notifications();
+      
+      // Clear existing messages and add new ones
+      this.messageService.clear();
+      
+      notifications.forEach(notification => {
+        this.messageService.add({
+          key: 'global', // Use a consistent key for global toasts
+          severity: notification.severity,
+          summary: notification.summary,
+          detail: notification.detail,
+          life: notification.sticky ? 0 : notification.life,
+          closable: notification.closable,
+          id: notification.id
+        });
+      });
+    });
+  }
+}

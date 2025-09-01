@@ -196,13 +196,6 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
                 audioFile: audioFile
             };
 
-            console.log('Sending audio evaluation request with:', {
-                question: request.question,
-                role: request.role,
-                proficiencyLevel: request.proficiencyLevel,
-                questionType: request.questionType,
-                audioFile: `${audioFile.name} (${audioFile.size} bytes)`
-            });
 
             // Convert audio file to base64 for IPC transmission
             const audioData = await this.audioFileToBase64(audioFile);
@@ -221,8 +214,13 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
             this.retryCount.set(0); // Reset retry count on success
             
             if (result) {
-                console.log('Audio evaluation completed:', result);
-                this.evaluation.set(result);
+                // Ensure percentage is calculated correctly
+                const processedResult = {
+                    ...result,
+                    percentage: result.percentage || Math.round((result.overallScore / result.maxScore) * 100)
+                };
+                
+                this.evaluation.set(processedResult);
             } else {
                 throw new Error('No evaluation result received');
             }
@@ -374,7 +372,6 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
         this.audioDuration.set(duration);
 
         // Audio recording complete - ready for evaluation
-        console.log('Audio recording completed, ready for evaluation');
     }
 
 
@@ -468,24 +465,122 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
 
     getCriteriaItems() {
         const evaluation = this.evaluation();
-        if (!evaluation) return [];
+        if (!evaluation || !evaluation.criteria) return [];
 
-        const criteriaLabels = {
-            technicalAccuracy: 'Technical Accuracy',
-            clarity: 'Clarity & Structure',
-            completeness: 'Completeness',
-            problemSolving: 'Problem Solving',
-            communication: 'Communication',
-            bestPractices: 'Best Practices'
+        const criteriaConfig = {
+            technicalAccuracy: { 
+                label: 'Technical Accuracy', 
+                icon: 'pi-check-circle', 
+                group: 'technical',
+                description: 'Correctness of technical information'
+            },
+            clarity: { 
+                label: 'Clarity & Structure', 
+                icon: 'pi-eye', 
+                group: 'technical',
+                description: 'How well structured and clear the answer is'
+            },
+            completeness: { 
+                label: 'Completeness', 
+                icon: 'pi-list-check', 
+                group: 'technical',
+                description: 'Coverage of all key points'
+            },
+            problemSolving: { 
+                label: 'Problem Solving', 
+                icon: 'pi-cog', 
+                group: 'technical',
+                description: 'Analytical thinking and approach'
+            },
+            communication: { 
+                label: 'Communication', 
+                icon: 'pi-comments', 
+                group: 'communication',
+                description: 'Professional communication skills'
+            },
+            bestPractices: { 
+                label: 'Best Practices', 
+                icon: 'pi-star', 
+                group: 'technical',
+                description: 'Knowledge of industry standards'
+            },
+            speakingPace: { 
+                label: 'Speaking Pace', 
+                icon: 'pi-clock', 
+                group: 'audio',
+                description: 'Appropriate speaking speed'
+            },
+            confidence: { 
+                label: 'Confidence Level', 
+                icon: 'pi-thumbs-up', 
+                group: 'audio',
+                description: 'Confidence in delivery'
+            },
+            articulation: { 
+                label: 'Articulation', 
+                icon: 'pi-volume-up', 
+                group: 'audio',
+                description: 'Clarity of speech'
+            },
+            professionalPresence: { 
+                label: 'Professional Presence', 
+                icon: 'pi-user', 
+                group: 'audio',
+                description: 'Professional demeanor and presence'
+            }
         };
 
         return Object.entries(evaluation.criteria)
-            .filter(([_, score]) => score > 0)
+            .filter(([_, score]) => score !== undefined && score > 0)
             .map(([key, score]) => ({
                 key,
-                label: criteriaLabels[key as keyof typeof criteriaLabels] || key,
-                score
-            }));
+                ...criteriaConfig[key as keyof typeof criteriaConfig],
+                score: Number(score)
+            }))
+            .sort((a, b) => {
+                // Sort by group first (technical, communication, audio), then by score
+                const groupOrder = { technical: 0, communication: 1, audio: 2 };
+                const groupA = groupOrder[a.group as keyof typeof groupOrder] ?? 3;
+                const groupB = groupOrder[b.group as keyof typeof groupOrder] ?? 3;
+                
+                if (groupA !== groupB) return groupA - groupB;
+                return b.score - a.score; // Within group, sort by score descending
+            });
+    }
+
+    getGroupedCriteria() {
+        const items = this.getCriteriaItems();
+        const groups = {
+            technical: items.filter(item => item.group === 'technical'),
+            communication: items.filter(item => item.group === 'communication'), 
+            audio: items.filter(item => item.group === 'audio')
+        };
+        return groups;
+    }
+
+    getCriteriaGroups() {
+        const items = this.getCriteriaItems();
+        
+        const groupConfig = {
+            technical: {
+                name: 'Technical Knowledge',
+                icon: 'pi pi-cog text-blue-600',
+                criteria: items.filter(item => item.group === 'technical')
+            },
+            communication: {
+                name: 'Communication Skills',
+                icon: 'pi pi-comments text-purple-600',
+                criteria: items.filter(item => item.group === 'communication')
+            },
+            audio: {
+                name: 'Speech & Delivery',
+                icon: 'pi pi-microphone text-green-600',
+                criteria: items.filter(item => item.group === 'audio')
+            }
+        };
+
+        // Return only groups that have criteria
+        return Object.values(groupConfig).filter(group => group.criteria.length > 0);
     }
 
     retryEvaluation() {
@@ -508,6 +603,17 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
         return this.retryCount() > 0 && this.retryCount() < 3 && !this.isEvaluating();
     }
 
+    // Type guard to check if evaluation is AudioEvaluationResult
+    isAudioEvaluation(evaluation: EvaluationResult | AudioEvaluationResult | null): evaluation is AudioEvaluationResult {
+        return evaluation !== null && 'audioAnalysis' in evaluation && evaluation.audioAnalysis !== undefined;
+    }
+
+    // Get audio evaluation if available (for template use)
+    get audioEvaluation(): AudioEvaluationResult | null {
+        const eval_ = this.evaluation();
+        return this.isAudioEvaluation(eval_) ? eval_ : null;
+    }
+
     getScoreSeverity(score: number): string {
         if (score >= 85) return 'success';
         if (score >= 70) return 'info'; 
@@ -520,8 +626,72 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
             case 'PASS': return 'success';
             case 'CONDITIONAL': return 'warn';
             case 'FAIL': return 'danger';
+            case 'NO DECISION': return 'secondary';
             default: return 'info';
         }
+    }
+
+    getScoreBackgroundClass(percentage: number): string {
+        if (percentage >= 70) return 'bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800';
+        if (percentage >= 40) return 'bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800';
+        return 'bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800';
+    }
+
+    getScoreColorClass(percentage: number): string {
+        if (percentage >= 70) return 'text-green-500';
+        if (percentage >= 40) return 'text-orange-500';
+        return 'text-red-500';
+    }
+
+    getScoreTextClass(percentage: number): string {
+        if (percentage >= 70) return 'text-green-700 dark:text-green-300';
+        if (percentage >= 40) return 'text-orange-700 dark:text-orange-300';
+        return 'text-red-700 dark:text-red-300';
+    }
+
+    getScoreLabel(percentage: number): string {
+        if (percentage >= 85) return 'Excellent Performance';
+        if (percentage >= 70) return 'Good Performance';
+        if (percentage >= 60) return 'Average Performance';
+        if (percentage >= 40) return 'Below Average';
+        return 'Needs Significant Improvement';
+    }
+
+    getScoreDescription(percentage: number): string {
+        if (percentage >= 85) return 'Outstanding answer with comprehensive coverage and excellent delivery';
+        if (percentage >= 70) return 'Solid answer with good technical content and communication';
+        if (percentage >= 60) return 'Adequate answer but missing some key points';
+        if (percentage >= 40) return 'Partial answer with several areas needing improvement';
+        return 'Answer lacks essential content and requires significant development';
+    }
+
+    getScoreColor(score: number): string {
+        if (score >= 8) return 'text-green-600';
+        if (score >= 6) return 'text-blue-600';
+        if (score >= 4) return 'text-orange-600';
+        return 'text-red-600';
+    }
+
+    getSpeakingRateStatus(rate: number): { text: string, class: string } {
+        if (rate >= 140 && rate <= 180) return { text: 'Ideal pace', class: 'text-green-600' };
+        if (rate >= 120 && rate <= 200) return { text: 'Good pace', class: 'text-blue-600' };
+        if (rate < 120) return { text: 'Too slow', class: 'text-orange-600' };
+        return { text: 'Too fast', class: 'text-red-600' };
+    }
+
+    getFillerWordStatus(count: number): { text: string, class: string } {
+        if (count === 0) return { text: 'Excellent - no filler words', class: 'text-green-600' };
+        if (count <= 2) return { text: 'Very good', class: 'text-green-600' };
+        if (count <= 5) return { text: 'Acceptable', class: 'text-blue-600' };
+        if (count <= 10) return { text: 'Room for improvement', class: 'text-orange-600' };
+        return { text: 'Too many filler words', class: 'text-red-600' };
+    }
+
+    getPauseStatus(avgLength: number): { text: string, class: string } {
+        if (avgLength <= 1.5) return { text: 'Natural flow', class: 'text-green-600' };
+        if (avgLength <= 2.5) return { text: 'Good pacing', class: 'text-blue-600' };
+        if (avgLength <= 4) return { text: 'Somewhat hesitant', class: 'text-orange-600' };
+        return { text: 'Long pauses', class: 'text-red-600' };
     }
 
     private async audioFileToBase64(file: File): Promise<string> {
