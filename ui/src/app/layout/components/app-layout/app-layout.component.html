@@ -2,11 +2,6 @@
     <!-- Top Toolbar - Compact Desktop Style -->
     <div class="app-toolbar">
         <div class="toolbar-start">
-            <!-- App Icon/Logo -->
-            <div class="app-logo">
-                <i class="pi pi-microphone text-primary text-2xl"></i>
-            </div>
-            
             <!-- Quick Actions -->
             <button 
                 pButton 
@@ -26,13 +21,16 @@
         </div>
 
         <div class="toolbar-end">
-            <!-- User Avatar -->
-            <p-avatar 
-                label="U" 
-                styleClass="cursor-pointer"
-                [style]="{'background-color':'var(--primary-color)', 'color': 'var(--primary-color-text)'}"
-                shape="circle">
-            </p-avatar>
+            <!-- Theme Toggle -->
+            <button 
+                pButton 
+                type="button" 
+                [icon]="layoutService.isDarkTheme() ? 'pi pi-sun' : 'pi pi-moon'"
+                class="p-button-text p-button-plain toolbar-button"
+                (click)="toggleTheme()"
+                [pTooltip]="layoutService.isDarkTheme() ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+                tooltipPosition="bottom">
+            </button>
         </div>
     </div>
 
@@ -81,8 +79,41 @@
     @if (layoutService.config().showStatusBar) {
         <div class="app-statusbar">
             <div class="statusbar-start">
-                <span class="text-muted-color text-xs">
-                    Interview Practice Assistant v1.0
+                <!-- Context Remaining -->
+                <span class="status-metric">
+                    <span [class]="layoutService.contextRemainingColor()">
+                        {{ layoutService.apiUsage().contextRemaining }}%
+                    </span>
+                </span>
+                
+                <span class="status-separator">|</span>
+                
+                <!-- Time until reset -->
+                <span class="status-metric">
+                    <i class="pi pi-clock text-xs mr-1"></i>
+                    {{ layoutService.timeUntilReset() }}
+                </span>
+                
+                <span class="status-separator">|</span>
+                
+                <!-- Token usage -->
+                <span class="status-metric">
+                    <i class="pi pi-chart-bar text-xs mr-1"></i>
+                    {{ layoutService.formatTokens(layoutService.apiUsage().tokensUsed) }} tok 
+                    @if (layoutService.apiUsage().tokensPerMinute > 0) {
+                        ({{ layoutService.apiUsage().tokensPerMinute }} tpm)
+                    }
+                </span>
+                
+                <span class="status-separator">|</span>
+                
+                <!-- Cost tracking -->
+                <span class="status-metric">
+                    <i class="pi pi-dollar text-xs mr-1"></i>
+                    {{ '$' + layoutService.apiUsage().apiCost.toFixed(2) }}
+                    @if (layoutService.apiUsage().costPerHour > 0) {
+                        ({{ '$' + layoutService.apiUsage().costPerHour.toFixed(2) }}/h)
+                    }
                 </span>
             </div>
             
@@ -94,10 +125,17 @@
             
             <div class="statusbar-end">
                 <span class="text-muted-color text-xs mr-3">
-                    <i class="pi pi-check-circle text-green-500 mr-1"></i>
-                    Ready
+                    <i class="pi pi-wifi mr-1"></i>
+                    Connected
+                </span>
+                <span class="text-muted-color text-xs">
+                    <i class="pi pi-database mr-1"></i>
+                    Local DB
                 </span>
             </div>
         </div>
     }
+
+    <!-- Global Toast Notifications -->
+    <app-global-toast />
 </div>
