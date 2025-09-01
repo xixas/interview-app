@@ -1,14 +1,22 @@
 import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { WorkInProgressComponent, WorkInProgressConfig } from '../../shared/components/work-in-progress.component';
+import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 @Component({
   selector: 'app-spaced-repetition',
   standalone: true,
-  imports: [CommonModule, WorkInProgressComponent],
+  imports: [CommonModule, WorkInProgressComponent, PageHeaderComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-work-in-progress [config]="spacedRepetitionConfig()" />
+    <div class="page-container">
+      <app-page-header 
+        title="Spaced Repetition Learning"
+        description="Optimize your learning with scientifically-proven spaced repetition algorithms"
+        icon="pi pi-refresh">
+      </app-page-header>
+      <app-work-in-progress [config]="spacedRepetitionConfig()" />
+    </div>
   `,
   styles: []
 })

@@ -1,14 +1,22 @@
 import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { WorkInProgressComponent, WorkInProgressConfig } from '../../shared/components/work-in-progress.component';
+import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 @Component({
   selector: 'app-progress',
   standalone: true,
-  imports: [CommonModule, WorkInProgressComponent],
+  imports: [CommonModule, WorkInProgressComponent, PageHeaderComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-work-in-progress [config]="progressConfig()" />
+    <div class="page-container">
+      <app-page-header 
+        title="Progress Analytics"
+        description="Track your interview practice progress with detailed analytics and insights"
+        icon="pi pi-chart-line">
+      </app-page-header>
+      <app-work-in-progress [config]="progressConfig()" />
+    </div>
   `,
   styles: []
 })

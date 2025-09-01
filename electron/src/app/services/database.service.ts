@@ -45,11 +45,11 @@ export class DatabaseService {
       this.dataSource = new DataSource({
         type: 'sqlite',
         database: dbPath,
-        entities: [], // We'll use raw queries for now
+        entities: [],
         synchronize: false,
         logging: false,
       });
-
+      
       await this.dataSource.initialize();
       console.log('Database initialized successfully in main process');
 
@@ -63,33 +63,9 @@ export class DatabaseService {
     }
   }
 
-  private getDatabasePath(): string {
-    return '/home/vikas/work/osmosys/mock-intervew-desktop/interview-app-v2/interview-app-v2/dist/api/assets/mock-interview-backup-2025-08-08.db'
-    // Check multiple possible database locations
-    const possiblePaths = [
-      // Development locations (most likely locations first)
-      join(__dirname, '..', '..', '..', '..', 'api', 'src', 'assets', 'mock-interview-backup-2025-08-08.db'),
-      join(__dirname, '..', '..', '..', '..', 'dist', 'api', 'assets', 'mock-interview-backup-2025-08-08.db'),
-      join(__dirname, '..', '..', '..', '..', 'ui', 'src', 'assets', 'mock-interview-backup-2025-08-08.db'),
-      join(__dirname, '..', '..', '..', '..', 'ui', 'src', 'assets', 'interview.db'),
-      join(__dirname, '..', '..', '..', '..', 'assets', 'interview.db'),
-      join(__dirname, '..', '..', '..', '..', 'shared-interfaces', 'assets', 'interview.db'),
-      // Production locations
-      join(process.resourcesPath, 'assets', 'mock-interview-backup-2025-08-08.db'),
-      join(process.resourcesPath, 'assets', 'interview.db'),
-      // User data fallback
-      join(app.getPath('userData'), 'interview.db'),
-    ];
-    console.log(possiblePaths)
-    for (const path of possiblePaths) {
-      if (existsSync(path)) {
-        console.log(`Found database at: ${path}`);
-        return path;
-      }
-    }
 
-    // If no database found, use the first development path for error reporting
-    return possiblePaths[0];
+  private getDatabasePath(): string {
+    return join(__dirname, '..', '..', 'api', 'src', 'assets', 'mock-interview-backup-2025-08-08.db');
   }
 
   private ensureInitialized(): void {

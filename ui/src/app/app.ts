@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy } from '@angular/core';
-import { AppLayoutComponent } from './layout/components/app-layout.component';
+import { AppLayoutComponent } from './layout/components/app-layout/app-layout.component';
 
 @Component({
   selector: 'app-root',

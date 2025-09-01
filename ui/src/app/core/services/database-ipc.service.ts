@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { NotificationService } from './notification.service';
 
 // Global type declarations for electron API
 declare global {
@@ -44,6 +45,7 @@ export interface Question {
   providedIn: 'root'
 })
 export class DatabaseIpcService {
+  private readonly notificationService = inject(NotificationService);
   private initialized = false;
 
   async initialize(): Promise<void> {
