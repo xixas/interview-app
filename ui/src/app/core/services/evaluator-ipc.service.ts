@@ -208,7 +208,6 @@ export class EvaluatorIpcService {
       if (!result.success) {
         throw new Error(result.error || 'API key validation failed');
       }
-
       return {
         valid: result.valid || false,
         message: result.message || 'API key validation failed',

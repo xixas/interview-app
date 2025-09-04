@@ -3,7 +3,7 @@ import { writeFile, readFile } from 'fs/promises';
 import { join } from 'path';
 import { app } from 'electron';
 import * as os from 'os';
-
+import { OpenAI } from 'openai';
 // Import database and evaluator services
 import { DatabaseService } from '../services/database.service';
 import { EvaluatorService } from '../services/evaluator.service';
@@ -449,7 +449,6 @@ export class IPCHandlers {
 
         // Step 3: Actual API validation with OpenAI
         try {
-          const { OpenAI } = await import('openai');
           const openai = new OpenAI({ apiKey: trimmedKey });
           
           // Make lightweight API call to verify key works

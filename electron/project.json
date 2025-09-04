@@ -50,6 +50,17 @@
         "frontendProject": "ui",
         "sourcePath": "dist",
         "outputPath": "dist/executables"
+      },
+      "configurations": {
+        "linux": {
+          "platform": "linux"
+        },
+        "windows": {
+          "platform": "win32"
+        },
+        "darwin": {
+          "platform": "darwin"
+        }
       }
     },
     "lint": {

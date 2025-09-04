@@ -4,6 +4,8 @@ import { environment } from '../environments/environment';
 import { join } from 'path';
 import { format } from 'url';
 import { IPCHandlers } from './api/ipc-handlers';
+import { ServiceManager } from './services/service-manager.service';
+import { ConfigManager } from './config/app.config';
 
 export default class App {
   // Keep a global reference of the window object, if you don't, the window will
@@ -12,6 +14,8 @@ export default class App {
   static application: Electron.App;
   static BrowserWindow;
   static ipcHandlers: IPCHandlers;
+  static serviceManager: ServiceManager;
+  static configManager: ConfigManager;
 
   public static isDevelopmentMode() {
     const isEnvironmentSet: boolean = 'ELECTRON_IS_DEV' in process.env;
@@ -22,7 +26,11 @@ export default class App {
   }
 
   private static onWindowAllClosed() {
-    // Cleanup IPC handlers
+    // Cleanup services and IPC handlers
+    if (App.serviceManager) {
+      App.serviceManager.stopAllServices();
+    }
+    
     if (App.ipcHandlers) {
       App.ipcHandlers.cleanup();
       App.ipcHandlers = null;
@@ -48,18 +56,41 @@ export default class App {
     }
   }
 
-  private static onReady() {
+  private static async onReady() {
     // This method will be called when Electron has finished
     // initialization and is ready to create browser windows.
     // Some APIs can only be used after this event occurs.
     if (rendererAppName) {
-      App.initMainWindow();
-      App.loadMainWindow();
-      App.setupApplicationMenu();
-      
-      // Initialize IPC handlers only once
-      if (!App.ipcHandlers) {
-        App.ipcHandlers = new IPCHandlers();
+      try {
+        // Initialize configuration and service managers
+        App.configManager = ConfigManager.getInstance();
+        App.serviceManager = ServiceManager.getInstance();
+        
+        // Initialize services (databases, ports, start backend services)
+        await App.serviceManager.initializeServices();
+        
+        // Create and show the main window
+        App.initMainWindow();
+        App.loadMainWindow();
+        App.setupApplicationMenu();
+        
+        // Initialize IPC handlers only once
+        if (!App.ipcHandlers) {
+          App.ipcHandlers = new IPCHandlers();
+        }
+        
+        console.log('✅ Application ready');
+      } catch (error) {
+        console.error('❌ Failed to initialize application:', error);
+        
+        // Show error dialog to user
+        const { dialog } = await import('electron');
+        dialog.showErrorBox('Startup Error', 
+          `Failed to start the application: ${error.message}\n\nThis may be due to port conflicts or missing dependencies.`
+        );
+        
+        // Quit the application
+        App.application.quit();
       }
     }
   }
@@ -117,8 +148,10 @@ export default class App {
   private static loadMainWindow() {
     // load the index.html of the app.
     if (!App.application.isPackaged) {
-      App.mainWindow.loadURL(`http://localhost:${rendererAppPort}`);
+      // In development, use the UI dev server port (3002)
+      App.mainWindow.loadURL(`http://localhost:3002`);
     } else {
+      // In packaged app, load from local files
       App.mainWindow.loadURL(
         format({
           pathname: join(__dirname, '..', rendererAppName, 'index.html'),
