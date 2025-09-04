@@ -47,6 +47,9 @@ import { EnvironmentService } from '../../core/services/environment.service';
 import { DatabaseIpcService } from '../../core/services/database-ipc.service';
 import { EvaluatorIpcService } from '../../core/services/evaluator-ipc.service';
 import { InterviewSessionService } from '../../core/services/interview-session.service';
+import { SettingsService } from '../../core/services/settings.service';
+import { NetworkService } from '../../core/services/network.service';
+import { NotificationService } from '../../core/services/notification.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 interface InterviewSettings {
@@ -167,6 +170,9 @@ export class InterviewComponent implements OnInit, OnDestroy {
   private databaseService = inject(DatabaseIpcService);
   private evaluatorService = inject(EvaluatorIpcService);
   private sessionService = inject(InterviewSessionService);
+  private settingsService = inject(SettingsService);
+  private networkService = inject(NetworkService);
+  private notificationService = inject(NotificationService);
   
   // Make Math and Array available in template
   protected readonly Math = Math;
@@ -177,6 +183,13 @@ export class InterviewComponent implements OnInit, OnDestroy {
   isLoading = signal(false);
   errorMessage = signal('');
   technologies = signal<TechnologyStats[]>([]);
+  
+  // API key and network status
+  hasValidApiKey = signal(false);
+  isOnline = signal(navigator.onLine);
+  canUseAI = signal(false);
+  apiKeyError = signal<string | null>(null);
+  networkError = signal<string | null>(null);
   
   settings = signal<InterviewSettings & { difficulty: UIDifficulty }>({
     category: '',
@@ -341,10 +354,173 @@ export class InterviewComponent implements OnInit, OnDestroy {
   private audioBlob: Blob | null = null;
   private audioUrl: string | null = null;
   private audioElement: HTMLAudioElement | null = null;
+  
+  // Network event handlers
+  private networkOnlineHandler: (() => void) | null = null;
+  private networkOfflineHandler: (() => void) | null = null;
 
   async ngOnInit() {
+    await this.initializeServices();
     await this.loadTechnologies();
     this.startSessionTimer();
+  }
+  
+  private async initializeServices(): Promise<void> {
+    try {
+      // Check API key status
+      await this.checkApiKeyStatus();
+      
+      // Check network connectivity
+      await this.checkNetworkStatus();
+      
+      // Subscribe to network changes
+      this.subscribeToNetworkChanges();
+      
+    } catch (error) {
+      console.error('Failed to initialize services:', error);
+      this.errorMessage.set('Failed to initialize required services');
+    }
+  }
+  
+  private async checkApiKeyStatus(): Promise<void> {
+    try {
+      const apiKey = await this.settingsService.getApiKey();
+      const hasKey = !!(apiKey && apiKey.trim().length > 0);
+      const isValid = hasKey && apiKey.startsWith('sk-') && apiKey.length > 20;
+      
+      this.hasValidApiKey.set(isValid);
+      
+      if (!hasKey) {
+        this.apiKeyError.set('OpenAI API key not configured. AI evaluation will not be available.');
+      } else if (!isValid) {
+        this.apiKeyError.set('Invalid OpenAI API key format. Please check your configuration.');
+      } else {
+        this.apiKeyError.set(null);
+      }
+    } catch (error) {
+      console.error('Error checking API key:', error);
+      this.apiKeyError.set('Failed to check API key status');
+      this.hasValidApiKey.set(false);
+    }
+  }
+  
+  private async checkNetworkStatus(): Promise<void> {
+    try {
+      const networkStatus = this.networkService.networkStatus();
+      this.isOnline.set(networkStatus.isOnline);
+      
+      const canUseAI = networkStatus.isOnline && networkStatus.canReachEvaluator && this.hasValidApiKey();
+      this.canUseAI.set(canUseAI);
+      
+      if (!networkStatus.isOnline) {
+        this.networkError.set('No internet connection. AI evaluation features unavailable.');
+      } else if (!networkStatus.canReachEvaluator) {
+        this.networkError.set('Evaluator service unavailable. AI features may not work properly.');
+      } else {
+        this.networkError.set(null);
+      }
+    } catch (error) {
+      console.error('Error checking network status:', error);
+      this.networkError.set('Failed to check network connectivity');
+      this.isOnline.set(false);
+      this.canUseAI.set(false);
+    }
+  }
+  
+  private subscribeToNetworkChanges(): void {
+    // Listen for network status changes
+    const onlineHandler = async () => {
+      this.isOnline.set(true);
+      await this.checkNetworkStatus();
+      if (this.hasValidApiKey()) {
+        this.notificationService.showInfo('Connection Restored', 'AI evaluation features are now available.');
+      }
+    };
+    
+    const offlineHandler = () => {
+      this.isOnline.set(false);
+      this.canUseAI.set(false);
+      this.networkError.set('Connection lost. AI evaluation temporarily unavailable.');
+      this.notificationService.showWarn('Connection Lost', 'AI evaluation features are temporarily unavailable.');
+    };
+    
+    window.addEventListener('online', onlineHandler);
+    window.addEventListener('offline', offlineHandler);
+    
+    // Store handlers for cleanup
+    this.networkOnlineHandler = onlineHandler;
+    this.networkOfflineHandler = offlineHandler;
+  }
+  
+  private async validateAIRequirements(): Promise<boolean> {
+    // Refresh status before validation
+    await this.checkApiKeyStatus();
+    await this.checkNetworkStatus();
+    
+    const hasApiKey = this.hasValidApiKey();
+    const isOnline = this.isOnline();
+    const networkStatus = this.networkService.networkStatus();
+    
+    // If no API key is configured, show specific guidance
+    if (!hasApiKey) {
+      this.notificationService.showWarn(
+        'API Key Required',
+        'OpenAI API key is required for AI evaluation. Please configure your API key in Settings.',
+        {
+          life: 8000,
+          closable: true
+        }
+      );
+      return false;
+    }
+    
+    // If offline, show connectivity message
+    if (!isOnline) {
+      this.notificationService.showError(
+        'No Internet Connection',
+        'Internet connection is required for AI evaluation. Please check your connection and try again.',
+        { life: 6000 }
+      );
+      return false;
+    }
+    
+    // If evaluator service is not reachable
+    if (!networkStatus.canReachEvaluator) {
+      this.notificationService.showError(
+        'Service Unavailable',
+        'AI evaluation service is not available. Please make sure all services are running. Try running: npm run dev',
+        {
+          life: 8000
+        }
+      );
+      return false;
+    }
+    
+    return true;
+  }
+  
+  // Method to navigate to settings (called from UI)
+  navigateToSettings(): void {
+    this.router.navigate(['/settings']);
+  }
+  
+  // Method to refresh services status (called from UI)
+  async refreshServicesStatus(): Promise<void> {
+    this.isLoading.set(true);
+    try {
+      await this.checkApiKeyStatus();
+      await this.checkNetworkStatus();
+      await this.networkService.refreshNetworkStatus();
+      
+      if (this.canUseAI()) {
+        this.notificationService.showSuccess('Services Ready', 'All services are configured and available.');
+      }
+    } catch (error) {
+      console.error('Failed to refresh services status:', error);
+      this.notificationService.showError('Refresh Failed', 'Failed to check services status.');
+    } finally {
+      this.isLoading.set(false);
+    }
   }
 
   ngOnDestroy() {
@@ -373,6 +549,20 @@ export class InterviewComponent implements OnInit, OnDestroy {
       this.audioElement.pause();
       this.audioElement = null;
     }
+    
+    // Clean up network event listeners
+    if (this.networkOnlineHandler) {
+      window.removeEventListener('online', this.networkOnlineHandler);
+      this.networkOnlineHandler = null;
+    }
+    
+    if (this.networkOfflineHandler) {
+      window.removeEventListener('offline', this.networkOfflineHandler);
+      this.networkOfflineHandler = null;
+    }
+    
+    // Clean up network service
+    this.networkService.destroy();
   }
 
   private async loadTechnologies() {
@@ -413,11 +603,16 @@ export class InterviewComponent implements OnInit, OnDestroy {
   }
 
   async startInterview() {
-  if (!this.canStartInterview()) return;
+    if (!this.canStartInterview()) return;
 
-  try {
-    this.isLoading.set(true);
-    this.errorMessage.set('');
+    // Check for API key and network connectivity before starting
+    if (!await this.validateAIRequirements()) {
+      return;
+    }
+
+    try {
+      this.isLoading.set(true);
+      this.errorMessage.set('');
 
     const s = this.settings();
     const apiDifficulty = toApiDifficulty(s.difficulty);

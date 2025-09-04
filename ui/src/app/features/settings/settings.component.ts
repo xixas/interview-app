@@ -11,6 +11,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
 import { EvaluatorIpcService } from '../../core/services/evaluator-ipc.service';
+import { SettingsService } from '../../core/services/settings.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 interface ApiKeyStatus {
@@ -40,6 +41,7 @@ interface ApiKeyStatus {
 })
 export class SettingsComponent {
   private evaluatorService = inject(EvaluatorIpcService);
+  private settingsService = inject(SettingsService);
 
   // Signals for component state
   apiKey = signal<string>('');
@@ -131,6 +133,9 @@ export class SettingsComponent {
           
           // Update the evaluator service with the new API key
           await this.notifyEvaluatorService();
+          
+          // Notify the settings service that API key was updated
+          await this.settingsService.saveSettings({ openaiApiKey: this.apiKey().trim() });
         } else {
           throw new Error('Failed to save API key');
         }
