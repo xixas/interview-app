@@ -406,6 +406,9 @@ export class InterviewComponent implements OnInit, OnDestroy {
   
   private async checkNetworkStatus(): Promise<void> {
     try {
+      // Initialize network service on first check
+      await this.networkService.initialize();
+      
       const networkStatus = this.networkService.networkStatus();
       this.isOnline.set(networkStatus.isOnline);
       
@@ -414,6 +417,8 @@ export class InterviewComponent implements OnInit, OnDestroy {
       
       if (!networkStatus.isOnline) {
         this.networkError.set('No internet connection. AI evaluation features unavailable.');
+      } else if (networkStatus.isChecking) {
+        this.networkError.set('Checking evaluator service availability...');
       } else if (!networkStatus.canReachEvaluator) {
         this.networkError.set('Evaluator service unavailable. AI features may not work properly.');
       } else {

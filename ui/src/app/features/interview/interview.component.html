@@ -46,24 +46,34 @@
           
           <!-- Network Status Warning -->
           @if (networkError()) {
-            <p-message [severity]="isOnline() ? 'info' : 'error'" [closable]="false">
+            <p-message [severity]="networkError()?.includes('Checking') ? 'info' : (isOnline() ? 'info' : 'error')" [closable]="false">
               <div class="flex items-center justify-between w-full">
                 <div class="flex items-center gap-3">
-                  <i class="pi" [class]="isOnline() ? 'pi-info-circle text-blue-600' : 'pi-wifi text-red-600'"></i>
+                  <i class="pi" [class]="networkError()?.includes('Checking') ? 'pi-spin pi-spinner text-blue-600' : (isOnline() ? 'pi-info-circle text-blue-600' : 'pi-wifi text-red-600')"></i>
                   <div>
-                    <div class="font-medium">{{ isOnline() ? 'Service Unavailable' : 'Connection Required' }}</div>
+                    <div class="font-medium">
+                      @if (networkError()?.includes('Checking')) {
+                        Checking Service
+                      } @else if (isOnline()) {
+                        Service Unavailable
+                      } @else {
+                        Connection Required
+                      }
+                    </div>
                     <div class="text-sm text-muted-color">{{ networkError() }}</div>
                   </div>
                 </div>
-                <p-button 
-                  label="Refresh Status"
-                  icon="pi pi-refresh"
-                  size="small"
-                  [severity]="isOnline() ? 'info' : 'danger'"
-                  outlined
-                  [loading]="isLoading()"
-                  (onClick)="refreshServicesStatus()">
-                </p-button>
+                @if (!networkError()?.includes('Checking')) {
+                  <p-button 
+                    label="Refresh Status"
+                    icon="pi pi-refresh"
+                    size="small"
+                    [severity]="isOnline() ? 'info' : 'danger'"
+                    outlined
+                    [loading]="isLoading()"
+                    (onClick)="refreshServicesStatus()">
+                  </p-button>
+                }
               </div>
             </p-message>
           }

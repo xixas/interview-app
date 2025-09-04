@@ -5,6 +5,7 @@ export interface NetworkStatus {
   canReachEvaluator: boolean;
   lastChecked: Date;
   error?: string;
+  isChecking?: boolean;
 }
 
 @Injectable({
@@ -14,7 +15,8 @@ export class NetworkService {
   private _networkStatus = signal<NetworkStatus>({
     isOnline: navigator.onLine,
     canReachEvaluator: false,
-    lastChecked: new Date()
+    lastChecked: new Date(),
+    isChecking: true
   });
 
   readonly networkStatus = this._networkStatus.asReadonly();
@@ -23,10 +25,17 @@ export class NetworkService {
   private readonly EVALUATOR_URL = 'http://localhost:3001/api';
   private onlineHandler: (() => void) | null = null;
   private offlineHandler: (() => void) | null = null;
+  private initialized = false;
 
   constructor() {
     this.initializeNetworkMonitoring();
-    this.checkEvaluatorService();
+  }
+
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+    
+    this.initialized = true;
+    await this.checkEvaluatorService();
   }
 
   private initializeNetworkMonitoring(): void {
@@ -70,11 +79,18 @@ export class NetworkService {
   }
 
   async checkEvaluatorService(): Promise<boolean> {
+    // Set checking state
+    this._networkStatus.update(current => ({
+      ...current,
+      isChecking: true
+    }));
+
     if (!this._networkStatus().isOnline) {
       this._networkStatus.update(current => ({
         ...current,
         canReachEvaluator: false,
-        error: 'No internet connection'
+        error: 'No internet connection',
+        isChecking: false
       }));
       return false;
     }
@@ -100,7 +116,8 @@ export class NetworkService {
         ...current,
         canReachEvaluator: canReach,
         lastChecked: new Date(),
-        error: canReach ? undefined : `Evaluator service unavailable (${response.status})`
+        error: canReach ? undefined : `Evaluator service unavailable (${response.status})`,
+        isChecking: false
       }));
 
       return canReach;
@@ -119,7 +136,8 @@ export class NetworkService {
         ...current,
         canReachEvaluator: false,
         lastChecked: new Date(),
-        error: errorMessage
+        error: errorMessage,
+        isChecking: false
       }));
 
       return false;
@@ -194,6 +212,12 @@ export class NetworkService {
     this.updateOnlineStatus(navigator.onLine);
     if (this._networkStatus().isOnline) {
       await this.checkEvaluatorService();
+    } else {
+      // If offline, make sure we're not in checking state
+      this._networkStatus.update(current => ({
+        ...current,
+        isChecking: false
+      }));
     }
   }
 
