@@ -230,10 +230,20 @@
                 <p-tag value="In Progress" severity="warning" [rounded]="true">
                   <i class="pi pi-clock text-xs mr-1"></i>
                 </p-tag>
-              } @else if (session.status === 'completed' && session.completedQuestions > 0) {
-                <p-tag value="Evaluating" severity="info" [rounded]="true">
-                  <i class="pi pi-spin pi-spinner text-xs mr-1"></i>
-                </p-tag>
+              } @else if (session.status === 'completed') {
+                @if (session.percentage !== null && session.percentage !== undefined && session.totalScore !== null && session.totalScore !== undefined) {
+                  <p-tag value="Completed" severity="success" [rounded]="true">
+                    <i class="pi pi-check text-xs mr-1"></i>
+                  </p-tag>
+                } @else if (session.completedQuestions > 0) {
+                  <p-tag value="Evaluating" severity="info" [rounded]="true">
+                    <i class="pi pi-spin pi-spinner text-xs mr-1"></i>
+                  </p-tag>
+                } @else {
+                  <p-tag value="Completed" severity="success" [rounded]="true">
+                    <i class="pi pi-check text-xs mr-1"></i>
+                  </p-tag>
+                }
               } @else {
                 <p-tag value="Incomplete" severity="secondary" [rounded]="true"></p-tag>
               }
@@ -253,7 +263,7 @@
                   </p-tag>
                 } @else if (session.completedQuestions > 0) {
                   <p-tag value="Evaluating" severity="info" [rounded]="true">
-                    <i class="pi pi-clock text-xs mr-1"></i>
+                    <i class="pi pi-spin pi-spinner text-xs mr-1"></i>
                   </p-tag>
                 } @else {
                   <p-tag value="Incomplete" severity="secondary" [rounded]="true"></p-tag>

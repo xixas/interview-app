@@ -58,11 +58,12 @@ export class InterviewResultsComponent implements OnInit {
 
     if (responses.length === 0) return null;
 
-    const avgTechnical = this.getAverageScore(responses, 'technicalAccuracy') / 10;
-    const avgClarity = this.getAverageScore(responses, 'clarity') / 10;
-    const avgCompleteness = this.getAverageScore(responses, 'completeness') / 10;
-    const avgProblemSolving = this.getAverageScore(responses, 'problemSolving') / 10;
-    const avgCommunication = this.getAverageScore(responses, 'communication') / 10;
+    // Convert 1-10 scores to percentages (0-100)
+    const avgTechnical = this.getAverageScore(responses, 'technicalAccuracy') * 10;
+    const avgClarity = this.getAverageScore(responses, 'clarity') * 10;
+    const avgCompleteness = this.getAverageScore(responses, 'completeness') * 10;
+    const avgProblemSolving = this.getAverageScore(responses, 'problemSolving') * 10;
+    const avgCommunication = this.getAverageScore(responses, 'communication') * 10;
 
     return {
       labels: ['Technical Accuracy', 'Clarity', 'Completeness', 'Problem Solving', 'Communication'],
@@ -87,15 +88,18 @@ export class InterviewResultsComponent implements OnInit {
     scales: {
       r: {
         beginAtZero: true,
-        max: 10,
+        max: 100,
         min: 0,
         ticks: {
-          stepSize: 2,
+          stepSize: 20,
           color: 'rgba(107, 114, 128, 0.6)',
           font: {
             size: 12
           },
-          backdropColor: 'transparent'
+          backdropColor: 'transparent',
+          callback: function(value: any) {
+            return value + '%';
+          }
         },
         grid: {
           color: 'rgba(107, 114, 128, 0.2)',

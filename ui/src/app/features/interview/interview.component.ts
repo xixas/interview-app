@@ -888,20 +888,70 @@ export class InterviewComponent implements OnInit, OnDestroy {
     if (!session) return;
 
     try {
-      // Calculate results
-      const responses = session.responses.filter(r => !r.skipped);
-      const totalScore = responses.reduce((sum, r) => sum + (r.aiAnalysis?.score || 0), 0);
-      const overallScore = responses.length > 0 ? Math.round(totalScore / responses.length) : 0;
+      let totalScore = 0;
+      let maxScore = 0;
+      let evaluatedResponses: any[] = [];
+      let pendingEvaluations = 0;
+
+      // If we have a database session, fetch actual evaluation results
+      if (dbSessionId) {
+        console.log('Fetching actual evaluation results from database...');
+        const dbSession = await this.sessionService.getSessionDetails(dbSessionId);
+        
+        if (dbSession && dbSession.responses) {
+          evaluatedResponses = dbSession.responses.filter((r: any) => !r.skipped);
+          
+          // Calculate actual scores from database using percentages (already calculated by evaluator)
+          let totalPercentage = 0;
+          let evaluatedCount = 0;
+          
+          for (const response of evaluatedResponses) {
+            if (response.percentage !== null && response.percentage !== undefined && response.percentage >= 0) {
+              totalPercentage += response.percentage;
+              evaluatedCount++;
+            } else {
+              // Response not yet evaluated
+              pendingEvaluations++;
+            }
+          }
+          
+          // Use average percentage instead of raw score calculation
+          totalScore = evaluatedCount > 0 ? Math.round(totalPercentage / evaluatedCount) : 0;
+          maxScore = 100; // Overall score is already a percentage
+          
+          console.log('Evaluation results:', {
+            totalScore,
+            maxScore,
+            evaluatedCount: evaluatedResponses.length - pendingEvaluations,
+            pendingCount: pendingEvaluations
+          });
+        } else {
+          // Fallback to frontend session if database session not found
+          console.log('Database session not found, using frontend session data');
+          const responses = session.responses.filter(r => !r.skipped);
+          totalScore = responses.reduce((sum, r) => sum + (r.aiAnalysis?.score || 0), 0);
+          maxScore = responses.length * 100;
+          evaluatedResponses = responses;
+        }
+      } else {
+        // No database session, use frontend data
+        const responses = session.responses.filter(r => !r.skipped);
+        totalScore = responses.reduce((sum, r) => sum + (r.aiAnalysis?.score || 0), 0);
+        maxScore = responses.length * 100;
+        evaluatedResponses = responses;
+      }
+
+      const overallScore = totalScore; // totalScore is already a percentage
 
       const result: InterviewResult = {
         overallScore,
         totalQuestions: session.questions.length,
-        answeredQuestions: responses.length,
+        answeredQuestions: evaluatedResponses.length,
         skippedQuestions: session.responses.filter(r => r.skipped).length,
         averageResponseTime: 0, // Would calculate from durations
-        strengthAreas: this.extractStrengths(responses),
-        improvementAreas: this.extractImprovements(responses),
-        recommendations: this.generateRecommendations(responses),
+        strengthAreas: this.extractStrengths(evaluatedResponses),
+        improvementAreas: this.extractImprovements(evaluatedResponses),
+        recommendations: this.generateRecommendations(evaluatedResponses),
         categoryBreakdown: []
       };
 
@@ -909,15 +959,24 @@ export class InterviewComponent implements OnInit, OnDestroy {
       if (dbSessionId) {
         const sessionTime = this.sessionTime();
         await this.sessionService.completeSession(dbSessionId, {
-          totalScore: totalScore,
-          maxScore: responses.length * 100, // Assuming 100 max per question
+          totalScore: overallScore, // Use percentage as totalScore
+          maxScore: 100, // Max percentage is always 100
           durationSeconds: sessionTime
         });
-        console.log('Database session completed successfully');
+        console.log('Database session completed successfully with actual scores:', {
+          totalScore,
+          maxScore,
+          percentage: overallScore
+        });
       }
 
       this.sessionResult.set(result);
       this.currentStep.set('results');
+
+      // If there are pending evaluations, log this for user awareness
+      if (pendingEvaluations > 0) {
+        console.log(`Note: ${pendingEvaluations} evaluations are still in progress. Scores may update when evaluations complete.`);
+      }
 
     } catch (error) {
       console.error('Failed to complete interview session:', error);

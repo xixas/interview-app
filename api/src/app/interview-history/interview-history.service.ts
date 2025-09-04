@@ -112,16 +112,15 @@ export class InterviewHistoryService {
     maxScore: number,
     durationSeconds: number
   ): Promise<void> {
-    // Prevent division by zero and NaN errors
-    const safeMaxScore = maxScore || 1;
+    // totalScore is now already a percentage (0-100), so use it directly
     const safeTotalScore = totalScore || 0;
-    const percentage = Math.round((safeTotalScore / safeMaxScore) * 100);
+    const safeMaxScore = maxScore || 100;
     
     await this.sessionRepository.update(sessionId, {
       status: 'completed',
       totalScore: safeTotalScore,
       maxScore: safeMaxScore,
-      percentage: isNaN(percentage) ? 0 : percentage,
+      percentage: Math.round(safeTotalScore), // totalScore is already the percentage
       durationSeconds,
       completedAt: new Date(),
     });
@@ -148,6 +147,7 @@ export class InterviewHistoryService {
     responseId: string,
     evaluation: EvaluationData
   ): Promise<void> {
+    // Update the response with evaluation data
     await this.responseRepository.update(responseId, {
       overallScore: evaluation.overallScore,
       maxScore: evaluation.maxScore,
@@ -169,6 +169,53 @@ export class InterviewHistoryService {
       transcriptionLanguage: evaluation.transcription?.language,
       evaluatedAt: new Date(),
     });
+
+    // Get the response to find its session
+    const response = await this.responseRepository.findOne({
+      where: { id: responseId }
+    });
+
+    if (response) {
+      // Recalculate session score if all evaluations are complete
+      await this.recalculateSessionScoreIfComplete(response.sessionId);
+    }
+  }
+
+  private async recalculateSessionScoreIfComplete(sessionId: string): Promise<void> {
+    // Get the session with all its responses
+    const session = await this.sessionRepository.findOne({
+      where: { id: sessionId, status: 'completed' },
+      relations: ['responses']
+    });
+
+    if (!session || !session.responses) return;
+
+    // All saved responses are answered responses (skipped ones aren't saved)
+    const answeredResponses = session.responses;
+    if (answeredResponses.length === 0) return;
+
+    // Check if all responses have been evaluated (have percentage scores)
+    const evaluatedResponses = answeredResponses.filter(r => 
+      r.percentage !== null && r.percentage !== undefined && r.percentage >= 0
+    );
+
+    // Only recalculate if all responses are evaluated
+    if (evaluatedResponses.length === answeredResponses.length) {
+      // Calculate average percentage
+      const totalPercentage = evaluatedResponses.reduce((sum, r) => sum + r.percentage, 0);
+      const averagePercentage = Math.round(totalPercentage / evaluatedResponses.length);
+
+      // Update session with final calculated score
+      await this.sessionRepository.update(sessionId, {
+        totalScore: averagePercentage,
+        maxScore: 100,
+        percentage: averagePercentage
+      });
+
+      console.log(`Session ${sessionId} score recalculated: ${averagePercentage}% (${evaluatedResponses.length}/${answeredResponses.length} responses evaluated)`);
+    } else {
+      console.log(`Session ${sessionId}: ${evaluatedResponses.length}/${answeredResponses.length} responses evaluated, waiting for more evaluations`);
+    }
   }
 
   async getSessionHistory(limit = 20, offset = 0): Promise<SessionSummary[]> {
