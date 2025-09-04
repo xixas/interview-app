@@ -1,0 +1,17 @@
+/* Settings component styles */
+
+.api-status {
+  min-height: 2.5rem;
+  display: flex;
+  align-items: center;
+}
+
+:host ::ng-deep {
+  .p-password input {
+    width: 100%;
+  }
+  
+  .p-select {
+    width: 100%;
+  }
+}

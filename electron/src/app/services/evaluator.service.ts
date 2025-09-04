@@ -58,6 +58,8 @@ export interface AudioEvaluationRequest {
   questionType: string;
   context?: string;
   audioData: string; // Base64 encoded audio data
+  referenceAnswer?: string; // Reference answer from database for comparison
+  example?: string; // Example code/snippet from database
 }
 
 export class EvaluatorService {
@@ -70,7 +72,7 @@ export class EvaluatorService {
     this.settingsService = settingsService;
     this.httpClient = axios.create({
       baseURL: this.baseUrl,
-      timeout: 30000,
+      timeout: 90000, // 90 seconds to accommodate OpenAI's 60-second timeout plus network overhead
       headers: {
         'Content-Type': 'application/json',
       },
@@ -135,8 +137,18 @@ export class EvaluatorService {
         throw new Error('AI Evaluator service is not available. Please check if the service is running.');
       }
 
+      // Transform to backend DTO format
+      const backendRequest = {
+        question: evaluationData.question,
+        answer: evaluationData.answer,
+        role: 'FRONTEND', // Default role - could be made configurable
+        proficiencyLevel: 'MID', // Default level - could be made configurable  
+        questionType: 'TECHNICAL', // Default type
+        context: evaluationData.technology ? `Technology: ${evaluationData.technology}, Difficulty: ${evaluationData.difficulty}` : undefined
+      };
+
       const headers = { 'X-OpenAI-API-Key': apiKey };
-      const response = await this.httpClient.post('/api/evaluator/evaluate', evaluationData, { headers });
+      const response = await this.httpClient.post('/api/evaluator/evaluate', backendRequest, { headers });
 
       // Return the response data directly without transformation
       return response.data;
@@ -154,6 +166,8 @@ export class EvaluatorService {
       console.log('Proficiency Level:', audioEvaluationData.proficiencyLevel);
       console.log('Question Type:', audioEvaluationData.questionType);
       console.log('Context:', audioEvaluationData.context);
+      console.log('Reference Answer Available:', !!audioEvaluationData.referenceAnswer);
+      console.log('Example Available:', !!audioEvaluationData.example);
       console.log('Audio Data Length:', audioEvaluationData.audioData?.length);
       
       // Get API key for the request - required for evaluation
@@ -170,6 +184,17 @@ export class EvaluatorService {
 
       // Convert base64 audio data to Buffer for multipart upload
       const audioBuffer = Buffer.from(audioEvaluationData.audioData, 'base64');
+      
+      // Debug: Check WebM magic bytes after conversion
+      const magicBytes = audioBuffer.slice(0, 4);
+      console.log('=== ELECTRON SERVICE - AUDIO BUFFER DEBUG ===');
+      console.log('Buffer size:', audioBuffer.length);
+      console.log('Magic bytes:', Array.from(magicBytes).map(b => '0x' + b.toString(16).padStart(2, '0')).join(', '));
+      
+      // Check if this is a valid WebM file
+      const webmMagic = [0x1A, 0x45, 0xDF, 0xA3];
+      const isValidWebM = webmMagic.every((byte, index) => magicBytes[index] === byte);
+      console.log('Is valid WebM after conversion:', isValidWebM);
       
       // Create form data for multipart upload
       const FormData = require('form-data');
@@ -188,6 +213,12 @@ export class EvaluatorService {
       formData.append('questionType', audioEvaluationData.questionType);
       if (audioEvaluationData.context) {
         formData.append('context', audioEvaluationData.context);
+      }
+      if (audioEvaluationData.referenceAnswer) {
+        formData.append('referenceAnswer', audioEvaluationData.referenceAnswer);
+      }
+      if (audioEvaluationData.example) {
+        formData.append('example', audioEvaluationData.example);
       }
 
       const headers = { 
@@ -250,13 +281,30 @@ export class EvaluatorService {
   }
 
   private async isServiceAvailable(): Promise<boolean> {
-    try {
-      const response = await this.httpClient.get('/api/evaluator/health', { timeout: 5000 });
-      return response.status === 200;
-    } catch (error) {
-      console.log('Evaluator service not available');
-      return false;
+    const maxRetries = 5;
+    const retryDelay = 2000; // 2 seconds
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Evaluator service health check - Attempt ${attempt}/${maxRetries}`);
+        const response = await this.httpClient.get('/api/evaluator/health', { timeout: 5000 });
+        
+        if (response.status === 200) {
+          console.log('Evaluator service is available and healthy');
+          return true;
+        }
+      } catch (error) {
+        console.log(`Evaluator service health check failed (attempt ${attempt}/${maxRetries}):`, error.message || error);
+        
+        if (attempt < maxRetries) {
+          console.log(`Waiting ${retryDelay}ms before next attempt...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+      }
     }
+    
+    console.error('Evaluator service is not available after all retry attempts');
+    return false;
   }
 
 }

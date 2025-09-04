@@ -6,6 +6,7 @@ export interface EvaluationRequest {
   questionId: string | number;
   question: string;
   answer: string;
+  referenceAnswer?: string;
   technology?: string;
   difficulty?: string;
   timeSpent?: number;
@@ -30,6 +31,8 @@ export interface AudioEvaluationRequest {
   questionType: string;
   context?: string;
   audioData: string; // Base64 encoded audio data
+  referenceAnswer?: string; // Reference answer from database for comparison
+  example?: string; // Example code/snippet from database
 }
 
 @Injectable({
@@ -130,6 +133,7 @@ export class EvaluatorIpcService {
         detailedFeedback: result.data.detailedFeedback || result.data.feedback || '',
         recommendation: result.data.recommendation ?? 'CONDITIONAL',
         nextSteps: result.data.nextSteps ?? [],
+        transcription: result.data.transcription,
         audioAnalysis: result.data.audioAnalysis,
       };
       
@@ -148,7 +152,8 @@ export class EvaluatorIpcService {
       }
       console.log('Detailed Feedback Length:', evaluation.detailedFeedback?.length);
       
-      this.notificationService.showSuccess('Evaluation Complete', `Your answer has been evaluated with a score of ${evaluation.percentage}%`);
+      // Toast notification removed to avoid distraction during interview
+      // this.notificationService.showSuccess('Evaluation Complete', `Your answer has been evaluated with a score of ${evaluation.percentage}%`);
       return evaluation;
     } catch (error) {
       console.error('Audio evaluation error:', error);

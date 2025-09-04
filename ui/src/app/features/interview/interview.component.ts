@@ -31,16 +31,22 @@ import { TextareaModule } from 'primeng/textarea';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { CheckboxModule } from 'primeng/checkbox';
 import { InputNumberModule } from 'primeng/inputnumber';
-import { DialogModule } from 'primeng/dialog';
+import { ConfirmationDialogComponent, ConfirmationConfig } from '../../shared/components/confirmation-dialog.component';
 import { MessageModule } from 'primeng/message';
 import { TagModule } from 'primeng/tag';
 import { PanelModule } from 'primeng/panel';
 import { FluidModule } from 'primeng/fluid';
+import { TableModule } from 'primeng/table';
+import { InputTextModule } from 'primeng/inputtext';
+import { TooltipModule } from 'primeng/tooltip';
+import { InputIconModule } from 'primeng/inputicon';
+import { IconFieldModule } from 'primeng/iconfield';
+import { RippleModule } from 'primeng/ripple';
 import { ProficiencyLevel, Role, QuestionDifficulty } from '@interview-app/shared-interfaces';
 import { EnvironmentService } from '../../core/services/environment.service';
-import { ElectronService } from '../../core/services/electron.service';
 import { DatabaseIpcService } from '../../core/services/database-ipc.service';
 import { EvaluatorIpcService } from '../../core/services/evaluator-ipc.service';
+import { InterviewSessionService } from '../../core/services/interview-session.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 
 interface InterviewSettings {
@@ -63,6 +69,7 @@ interface TechnologyStats {
 interface Question {
   id: string;
   question: string;
+  answer: string; // Reference answer from database
   category: string;
   difficulty: string;
   type: string;
@@ -86,7 +93,6 @@ interface InterviewResponse {
   questionId: string;
   question: string;
   userAnswer?: string;
-  transcription?: string;
   audioBlob?: Blob;
   audioUrl?: string;
   skipped: boolean;
@@ -138,11 +144,17 @@ interface InterviewResult {
     ProgressBarModule,
     CheckboxModule,
     InputNumberModule,
-    DialogModule,
+    ConfirmationDialogComponent,
     MessageModule,
     TagModule,
     PanelModule,
     FluidModule,
+    TableModule,
+    InputTextModule,
+    TooltipModule,
+    InputIconModule,
+    IconFieldModule,
+    RippleModule,
     PageHeaderComponent
   ],
   templateUrl: './interview.component.html',
@@ -152,9 +164,9 @@ interface InterviewResult {
 export class InterviewComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   protected env = inject(EnvironmentService);
-  private electron = inject(ElectronService);
   private databaseService = inject(DatabaseIpcService);
   private evaluatorService = inject(EvaluatorIpcService);
+  private sessionService = inject(InterviewSessionService);
   
   // Make Math and Array available in template
   protected readonly Math = Math;
@@ -178,6 +190,7 @@ export class InterviewComponent implements OnInit, OnDestroy {
 
   // Interview session state
   currentSession = signal<InterviewSession | null>(null);
+  currentDbSessionId = signal<string | null>(null); // Backend database session ID
   currentQuestion = signal<Question | null>(null);
   currentAnswer = signal('');
   sessionTime = signal(0);
@@ -188,13 +201,22 @@ export class InterviewComponent implements OnInit, OnDestroy {
 
   // Dialog state
   // New recording-related signals
-  answerMode = signal<'text' | 'audio'>('text');
+  answerMode = signal<'audio'>('audio'); // Interview is voice-only
   recordingTime = signal(0);
   recordingDuration = signal(0);
-  transcription = signal<string | null>(null);
-  isTranscribing = signal(false);
   isPlaying = signal(false);
   showEndDialog = signal(false);
+  
+  // Dialog configuration
+  endDialogConfig = signal<ConfirmationConfig>({
+    title: 'End Interview Session',
+    message: 'Are you sure you want to end the current interview session? Your progress will be saved.',
+    confirmLabel: 'End Session',
+    cancelLabel: 'Cancel',
+    confirmSeverity: 'danger',
+    icon: 'pi pi-exclamation-triangle',
+    width: '450px'
+  });
 
   // Computed values
   techOptions = computed(() => 
@@ -247,6 +269,7 @@ export class InterviewComponent implements OnInit, OnDestroy {
     }
   });
 
+
   progress = computed(() => {
     const session = this.currentSession();
     if (!session) return null;
@@ -281,9 +304,9 @@ export class InterviewComponent implements OnInit, OnDestroy {
   });
 
   canSubmit = computed(() => {
-    const hasTextAnswer = this.answerMode() === 'text' && this.currentAnswer().trim().length > 0;
-    const hasAudioAnswer = this.answerMode() === 'audio' && this.hasRecording();
-    return (hasTextAnswer || hasAudioAnswer) && !this.isProcessing();
+    // Interview is voice-only, so only check for audio recording
+    const hasAudioAnswer = this.hasRecording();
+    return hasAudioAnswer && !this.isProcessing();
   });
 
   hasNext = computed(() => {
@@ -312,7 +335,6 @@ export class InterviewComponent implements OnInit, OnDestroy {
   private timerInterval: any;
   private recordingTimer: any;
   private recordingTimeTimer: any;
-  private audioRecording: any;
   // MediaRecorder API fields
   private mediaRecorder: MediaRecorder | null = null;
   private audioChunks: Blob[] = [];
@@ -408,9 +430,17 @@ export class InterviewComponent implements OnInit, OnDestroy {
 
     if (!dbQuestions?.length) throw new Error('No questions available for the selected criteria');
 
+    // Create database session for tracking
+    const dbSession = await this.sessionService.createSession({
+      technology: s.category,
+      difficulty: apiDifficulty,
+      totalQuestions: s.numberOfQuestions
+    });
+
     const questions: Question[] = dbQuestions.map(q => ({
       id: String(q.id),
       question: q.question,
+      answer: q.answer || '', // Include reference answer
       category: q.category,
       difficulty: toUiDifficulty(q.difficulty),    // <-- normalize back for UI
       type: 'technical',
@@ -429,6 +459,7 @@ export class InterviewComponent implements OnInit, OnDestroy {
     };
 
     this.currentSession.set(session);
+    this.currentDbSessionId.set(dbSession.id); // Store the database session ID
     this.currentQuestion.set(questions[0]);
     this.currentStep.set('interview');
   } catch (error) {
@@ -447,47 +478,71 @@ export class InterviewComponent implements OnInit, OnDestroy {
 
     const session = this.currentSession();
     const question = this.currentQuestion();
+    const dbSessionId = this.currentDbSessionId();
     
-    if (!session || !question) {
+    if (!session || !question || !dbSessionId) {
       return;
     }
 
     try {
       this.isProcessing.set(true);
 
-      // Create response
-      const response: InterviewResponse = {
+      // Create database response with audio reference and question data for historical accuracy
+      const dbResponse = await this.sessionService.createResponse({
+        sessionId: dbSessionId,
+        questionId: parseInt(question.id),
+        questionOrder: session.currentQuestionIndex + 1,
+        questionText: question.question,
+        questionAnswer: question.answer,
+        questionExample: question.example,
+        questionDifficulty: question.difficulty,
+        answer: 'Audio answer submitted', // Placeholder text
+        audioUrl: this.audioUrl || undefined,
+        timeSpentSeconds: this.recordingDuration()
+      });
+
+      console.log('Database response created:', dbResponse);
+
+      // Create UI response for session tracking
+      const uiResponse: InterviewResponse = {
         id: this.generateId(),
         questionId: question.id,
         question: question.question,
-        userAnswer: this.answerMode() === 'text' ? this.currentAnswer() || undefined : this.transcription() || undefined,
-        transcription: this.transcription() || undefined,
+        userAnswer: 'Audio answer submitted',
         audioBlob: this.audioBlob || undefined,
         audioUrl: this.audioUrl || undefined,
         skipped: false,
         startTime: new Date(),
         endTime: new Date(),
-        duration: this.answerMode() === 'audio' ? this.recordingDuration() : 0
+        duration: this.recordingDuration()
       };
 
-      // Add response to session
+      // Add response to UI session
       this.currentSession.update(current => {
         if (!current) return current;
         return {
           ...current,
-          responses: [...current.responses, response]
+          responses: [...current.responses, uiResponse]
         };
       });
 
-      // If AI analysis is enabled, send for evaluation
-      if (this.settings().enableAIAnalysis) {
-        this.evaluateAnswer(response);
+      // Update session progress in database
+      await this.sessionService.updateSessionProgress(
+        dbSessionId, 
+        session.responses.length + 1
+      );
+
+      // Send audio to backend for async evaluation (fire and forget)
+      if (this.settings().enableAIAnalysis && this.audioBlob) {
+        this.sendAudioForEvaluation(dbResponse.id, question).catch(error => {
+          console.warn('Background evaluation submission failed:', error);
+        });
       }
 
-      // Clean up form state
+      // Clean up form state and proceed immediately
       this.resetAnswerState();
 
-      // Move to next question or complete interview
+      // Always proceed to next question immediately (async interview flow)
       if (this.hasNext()) {
         this.nextQuestion();
       } else {
@@ -502,49 +557,57 @@ export class InterviewComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async evaluateAnswer(response: InterviewResponse) {
+  private async sendAudioForEvaluation(responseId: string, question: Question) {
     try {
-      const evaluation = await this.evaluatorService.evaluateAnswer({
-        questionId: response.questionId,
-        question: response.question,
-        answer: response.userAnswer || response.transcription || '',
-        technology: this.settings().category,
-        difficulty: this.settings().difficulty
-      });
+      if (!this.audioBlob) {
+        console.warn('No audio blob available for evaluation');
+        return;
+      }
 
-      // Update response with AI analysis
-      this.currentSession.update(current => {
-        if (!current) return current;
-        
-        const updatedResponses = current.responses.map(r => 
-          r.id === response.id 
-            ? {
-                ...r,
-                aiAnalysis: {
-                  score: evaluation.overallScore || 0,
-                  metrics: {
-                    technicalAccuracy: evaluation.criteria?.technicalAccuracy || 0,
-                    communication: evaluation.criteria?.communication || 0,
-                    completeness: evaluation.criteria?.completeness || 0
-                  },
-                  strengths: evaluation.strengths || [],
-                  improvements: evaluation.improvements || [],
-                  feedback: evaluation.detailedFeedback || ''
-                }
-              }
-            : r
-        );
-
-        return {
-          ...current,
-          responses: updatedResponses
-        };
+      console.log('Sending audio for evaluation - response ID:', responseId);
+      
+      // Convert audio to base64
+      const audioBase64 = await this.convertBlobToBase64(this.audioBlob);
+      
+      // Send audio evaluation request to backend (fire and forget)
+      await this.evaluatorService.evaluateAudioAnswer({
+        question: question.question,
+        role: 'FRONTEND',
+        proficiencyLevel: 'MID',
+        questionType: 'TECHNICAL',
+        context: `Technology: ${this.settings().category}, Difficulty: ${this.settings().difficulty}`,
+        audioData: audioBase64,
+        referenceAnswer: question.answer, // Include reference answer from database
+        example: question.example // Include example from database if available
+      }).then(async (audioEvaluation) => {
+        // Update the database with evaluation results when ready
+        await this.sessionService.updateResponseEvaluation(responseId, {
+          overallScore: audioEvaluation.overallScore || 0,
+          maxScore: audioEvaluation.maxScore || 100,
+          percentage: audioEvaluation.percentage || 0,
+          detailedFeedback: audioEvaluation.detailedFeedback || '',
+          recommendation: audioEvaluation.recommendation || 'Keep practicing!',
+          technicalAccuracy: audioEvaluation.criteria?.technicalAccuracy || 0,
+          clarity: audioEvaluation.criteria?.clarity || 0,
+          completeness: audioEvaluation.criteria?.completeness || 0,
+          problemSolving: audioEvaluation.criteria?.problemSolving || 0,
+          communication: audioEvaluation.criteria?.communication || 0,
+          bestPractices: audioEvaluation.criteria?.bestPractices || 0,
+          strengths: audioEvaluation.strengths || [],
+          improvements: audioEvaluation.improvements || [],
+          nextSteps: audioEvaluation.nextSteps || [],
+          criteriaFeedback: audioEvaluation.criteriaFeedback || {},
+          transcription: audioEvaluation.transcription
+        });
+        console.log('Evaluation completed and stored for response:', responseId);
       });
 
     } catch (error) {
-      console.error('Failed to evaluate answer:', error);
+      console.error('Failed to send audio for evaluation:', error);
+      // Don't throw - this is a background operation
     }
   }
+
 
   skipQuestion() {
     if (!this.canSkip()) {
@@ -652,7 +715,6 @@ export class InterviewComponent implements OnInit, OnDestroy {
       this.audioChunks = [];
       this.audioBlob = null;
       this.audioUrl = null;
-      this.transcription.set(null);
       
       // Create MediaRecorder
       this.mediaRecorder = new MediaRecorder(stream, {
@@ -750,57 +812,10 @@ export class InterviewComponent implements OnInit, OnDestroy {
       this.isPlaying.set(false);
     });
     
-    // Start transcription if enabled
-    if (this.currentSession()?.settings?.enableAIAnalysis) {
-      this.transcribeAudio();
-    }
+    // No transcription needed - audio will be evaluated in backend
+    console.log('Audio recorded successfully, ready for submission');
   }
 
-  private async transcribeAudio() {
-    if (!this.audioBlob) {
-      console.warn('No audio blob to transcribe');
-      return;
-    }
-    
-    try {
-      this.isTranscribing.set(true);
-      
-      // Convert blob to base64 for API
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64Audio = reader.result as string;
-        
-        try {
-          // Call transcription service
-          const result = await this.evaluatorService.transcribeAudio(base64Audio);
-          
-          if (result.text && result.text.trim()) {
-            this.transcription.set(result.text.trim());
-          } else {
-            console.warn('Transcription returned empty text');
-            this.transcription.set('(No speech detected in recording)');
-          }
-        } catch (error) {
-          console.error('Transcription error:', error);
-          this.transcription.set('(Transcription failed - please check your API key configuration)');
-        } finally {
-          this.isTranscribing.set(false);
-        }
-      };
-      
-      reader.onerror = () => {
-        console.error('Failed to read audio file');
-        this.transcription.set('(Failed to process audio)');
-        this.isTranscribing.set(false);
-      };
-      
-      reader.readAsDataURL(this.audioBlob);
-    } catch (error) {
-      console.error('Failed to start transcription:', error);
-      this.transcription.set('(Transcription unavailable)');
-      this.isTranscribing.set(false);
-    }
-  }
 
   private resetAnswerState() {
     // Reset text answer
@@ -811,8 +826,6 @@ export class InterviewComponent implements OnInit, OnDestroy {
     this.hasRecording.set(false);
     this.recordingTime.set(0);
     this.recordingDuration.set(0);
-    this.transcription.set(null);
-    this.isTranscribing.set(false);
     this.isPlaying.set(false);
     
     // Clean up MediaRecorder
@@ -836,11 +849,11 @@ export class InterviewComponent implements OnInit, OnDestroy {
     
     this.audioBlob = null;
     this.audioChunks = [];
-    this.audioRecording = null;
     
-    // Reset to text mode
-    this.answerMode.set('text');
+    // Reset to audio mode (interview is voice-only)
+    this.answerMode.set('audio');
   }
+
 
   togglePlayback() {
     if (!this.audioElement) {
@@ -868,29 +881,66 @@ export class InterviewComponent implements OnInit, OnDestroy {
     this.completeInterview();
   }
 
-  private completeInterview() {
+  private async completeInterview() {
     const session = this.currentSession();
+    const dbSessionId = this.currentDbSessionId();
+    
     if (!session) return;
 
-    // Calculate results
-    const responses = session.responses.filter(r => !r.skipped);
-    const totalScore = responses.reduce((sum, r) => sum + (r.aiAnalysis?.score || 0), 0);
-    const overallScore = responses.length > 0 ? Math.round(totalScore / responses.length) : 0;
+    try {
+      // Calculate results
+      const responses = session.responses.filter(r => !r.skipped);
+      const totalScore = responses.reduce((sum, r) => sum + (r.aiAnalysis?.score || 0), 0);
+      const overallScore = responses.length > 0 ? Math.round(totalScore / responses.length) : 0;
 
-    const result: InterviewResult = {
-      overallScore,
-      totalQuestions: session.questions.length,
-      answeredQuestions: responses.length,
-      skippedQuestions: session.responses.filter(r => r.skipped).length,
-      averageResponseTime: 0, // Would calculate from durations
-      strengthAreas: this.extractStrengths(responses),
-      improvementAreas: this.extractImprovements(responses),
-      recommendations: this.generateRecommendations(responses),
-      categoryBreakdown: []
-    };
+      const result: InterviewResult = {
+        overallScore,
+        totalQuestions: session.questions.length,
+        answeredQuestions: responses.length,
+        skippedQuestions: session.responses.filter(r => r.skipped).length,
+        averageResponseTime: 0, // Would calculate from durations
+        strengthAreas: this.extractStrengths(responses),
+        improvementAreas: this.extractImprovements(responses),
+        recommendations: this.generateRecommendations(responses),
+        categoryBreakdown: []
+      };
 
-    this.sessionResult.set(result);
-    this.currentStep.set('results');
+      // Complete the database session if exists
+      if (dbSessionId) {
+        const sessionTime = this.sessionTime();
+        await this.sessionService.completeSession(dbSessionId, {
+          totalScore: totalScore,
+          maxScore: responses.length * 100, // Assuming 100 max per question
+          durationSeconds: sessionTime
+        });
+        console.log('Database session completed successfully');
+      }
+
+      this.sessionResult.set(result);
+      this.currentStep.set('results');
+
+    } catch (error) {
+      console.error('Failed to complete interview session:', error);
+      // Still show results even if database update fails
+      const responses = session.responses.filter(r => !r.skipped);
+      const totalScore = responses.reduce((sum, r) => sum + (r.aiAnalysis?.score || 0), 0);
+      const overallScore = responses.length > 0 ? Math.round(totalScore / responses.length) : 0;
+
+      const result: InterviewResult = {
+        overallScore,
+        totalQuestions: session.questions.length,
+        answeredQuestions: responses.length,
+        skippedQuestions: session.responses.filter(r => r.skipped).length,
+        averageResponseTime: 0,
+        strengthAreas: this.extractStrengths(responses),
+        improvementAreas: this.extractImprovements(responses),
+        recommendations: this.generateRecommendations(responses),
+        categoryBreakdown: []
+      };
+
+      this.sessionResult.set(result);
+      this.currentStep.set('results');
+    }
   }
 
   private extractStrengths(responses: InterviewResponse[]): string[] {
@@ -941,6 +991,7 @@ export class InterviewComponent implements OnInit, OnDestroy {
   startNewInterview() {
     this.sessionResult.set(null);
     this.currentSession.set(null);
+    this.currentDbSessionId.set(null);
     this.currentQuestion.set(null);
     this.currentAnswer.set('');
     this.currentStep.set('setup');
@@ -973,6 +1024,43 @@ export class InterviewComponent implements OnInit, OnDestroy {
 
   private generateId(): string {
     return Math.random().toString(36).substr(2, 9);
+  }
+
+  private async convertBlobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        // Extract only the base64 part, removing the "data:audio/webm;base64," prefix
+        const base64 = result.split(',')[1];
+        
+        // Debug: Check the original blob and base64
+        console.log('=== FRONTEND - AUDIO CONVERSION DEBUG ===');
+        console.log('Original blob type:', blob.type);
+        console.log('Original blob size:', blob.size);
+        console.log('Base64 length:', base64.length);
+        
+        // Check first few characters of base64 to verify it starts correctly
+        console.log('Base64 starts with:', base64.substring(0, 20));
+        
+        // Decode the first few bytes to check WebM magic bytes
+        const firstBytes = atob(base64.substring(0, 8)); // Decode first ~6 bytes
+        const magicBytes: number[] = [];
+        for (let i = 0; i < Math.min(4, firstBytes.length); i++) {
+          magicBytes.push(firstBytes.charCodeAt(i));
+        }
+        console.log('Decoded magic bytes:', magicBytes.map(b => '0x' + b.toString(16).padStart(2, '0')).join(', '));
+        
+        // Check if this is a valid WebM file (0x1A, 0x45, 0xDF, 0xA3)
+        const webmMagic = [0x1A, 0x45, 0xDF, 0xA3];
+        const isValidWebM = webmMagic.every((byte, index) => magicBytes[index] === byte);
+        console.log('Is valid WebM in frontend:', isValidWebM);
+        
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   }
 
   private startSessionTimer() {
@@ -1022,4 +1110,25 @@ export class InterviewComponent implements OnInit, OnDestroy {
   goToDashboard() {
     this.router.navigate(['/dashboard']);
   }
+
+  viewDetailedResults() {
+    // Navigate to Interview History page with session filter
+    const sessionId = this.currentDbSessionId();
+    if (sessionId) {
+      this.router.navigate(['/interview-history', sessionId]);
+    } else {
+      // Fallback to practice history tab
+      this.router.navigate(['/interview'], { fragment: 'history' });
+    }
+  }
+
+  goToProgress() {
+    this.router.navigate(['/progress']);
+  }
+
+  // Navigation methods
+  navigateToHistory() {
+    this.router.navigate(['/interview-history']);
+  }
+
 }

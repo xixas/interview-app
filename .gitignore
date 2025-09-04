@@ -52,6 +52,10 @@ IMPLEMENTATION_SUMMARY.md
 TESTING_GUIDE.md
 PLAYWRIGHT_TESTING_GUIDE.md
 DATABASE_MIGRATION.sql
+PROMPT.md
+primeng-component-document-index.md
+primeng-docs-reference.md
+UI_TESTING_INSTRUCTIONS.md
 
 # AI assistant artifacts
 .claude/
@@ -84,18 +88,27 @@ logs/
 **/apikey*
 openai_key*
 
-# Local database files
+# Local database files and user data
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
+*.db-wal
 api/src/assets/*.db
 evaluator/src/assets/*.db
 electron/src/assets/*.db
+data/*.db
+data/*.db-journal
+data/*.db-wal
 
-# Examples and backups
+# Examples and backups (demo content, not needed for production)
 examples/
 backup*/
 *backup*/
+
+# Temporary database configuration files
+api/src/data-source.ts
+api/src/user-history-data-source.ts
 
 # Additional build artifacts
 *.tsbuildinfo

@@ -1,13 +1,24 @@
 <div class="page-container">
   <!-- Session Setup Phase -->
   @if (currentStep() === 'setup') {
-    <div class="page-container">
       <!-- Page Header -->
       <app-page-header 
-        title="Configure Interview Session"
-        description="Set up your mock interview preferences"
-        icon="pi pi-cog">
+        title="Practice Interview"
+        description="Start a new interview session"
+        icon="pi pi-microphone">
+        <div slot="actions" class="page-actions">
+          <p-button 
+            label="Interview History"
+            icon="pi pi-history"
+            severity="secondary"
+            outlined
+            (onClick)="navigateToHistory()"
+            size="small">
+          </p-button>
+        </div>
       </app-page-header>
+
+      <!-- Interview Settings -->
 
       <!-- Main Configuration Layout -->
       <div class="grid grid-cols-12 gap-8">
@@ -236,7 +247,6 @@
           </div>
         </div>
       </div>
-    </div>
   }
 
   <!-- Interview In Progress Phase -->
@@ -297,48 +307,16 @@
             </div>
 
               <!-- Answer Tabs -->
-              @if (currentSession()?.settings?.recordAudio) {
-                <div class="flex gap-4 mb-6 border-b border-surface-200 dark:border-surface-700">
-                  <button 
-                    class="flex items-center gap-2 px-4 py-3 bg-transparent border-none text-surface-600 dark:text-surface-400 cursor-pointer border-b-4 border-transparent transition-all duration-200 text-base font-medium hover:text-surface-900 hover:dark:text-surface-0 hover:bg-surface-50 hover:dark:bg-surface-800"
-                    [class]="answerMode() === 'text' ? 'text-primary border-primary' : ''"
-                    (click)="answerMode.set('text')">
-                    <i class="pi pi-pencil text-lg"></i>
-                    <span>Type Answer</span>
-                  </button>
-                  <button 
-                    class="flex items-center gap-2 px-4 py-3 bg-transparent border-none text-surface-600 dark:text-surface-400 cursor-pointer border-b-4 border-transparent transition-all duration-200 text-base font-medium hover:text-surface-900 hover:dark:text-surface-0 hover:bg-surface-50 hover:dark:bg-surface-800"
-                    [class]="answerMode() === 'audio' ? 'text-primary border-primary' : ''"
-                    (click)="answerMode.set('audio')">
-                    <i class="pi pi-microphone text-lg"></i>
-                    <span>Voice Answer</span>
-                  </button>
-                </div>
-              } @else {
-                <div class="mb-6">
-                  <h3 class="flex items-center gap-2 text-surface-900 dark:text-surface-0 text-lg font-semibold m-0">
-                    <i class="pi pi-pencil text-primary"></i>
-                    Your Answer
-                  </h3>
-                </div>
-              }
+              <!-- Voice-only Interview Header -->
+              <div class="mb-6">
+                <h3 class="flex items-center gap-2 text-surface-900 dark:text-surface-0 text-lg font-semibold m-0">
+                  <i class="pi pi-microphone text-primary"></i>
+                  Voice Answer (Interview Mode)
+                </h3>
+                <p class="text-muted-color text-sm mt-1">Record your spoken response to answer this question.</p>
+              </div>
                 
-                <!-- Text Answer Tab -->
-                @if (answerMode() === 'text' || !currentSession()?.settings?.recordAudio) {
-                  <div class="min-h-48">
-                    <p-textarea 
-                      [ngModel]="currentAnswer()"
-                      (ngModelChange)="currentAnswer.set($event)"
-                      placeholder="Type your detailed answer here... Explain your thought process and approach."
-                      rows="8"
-                      styleClass="w-full"
-                      [disabled]="isProcessing()">
-                    </p-textarea>
-                  </div>
-                }
-                
-                <!-- Audio Answer Tab -->
-                @if (answerMode() === 'audio' && currentSession()?.settings?.recordAudio) {
+                <!-- Audio Answer Only (Voice-only Interview) -->
                   <div class="answer-content audio-mode">
                     <!-- Compact Recording Interface -->
                     <div class="w-full max-w-md text-center mx-auto">
@@ -373,17 +351,10 @@
                               <span class="text-lg font-semibold block mb-1">
                                 <i class="pi pi-check-circle mr-2"></i>Recording Complete!
                               </span>
-                              @if (isTranscribing()) {
-                                <span class="text-sm text-surface-600 dark:text-surface-400 italic flex items-center justify-center gap-2">
-                                  <i class="pi pi-spin pi-spinner text-xs"></i>
-                                  Transcribing...
-                                </span>
-                              } @else if (transcription()) {
-                                <span class="text-sm text-green-500 flex items-center justify-center gap-1">
-                                  <i class="pi pi-file-check text-xs"></i>
-                                  Transcription ready
-                                </span>
-                              }
+                              <span class="text-sm text-green-500 flex items-center justify-center gap-1">
+                                <i class="pi pi-microphone-alt text-xs"></i>
+                                Audio ready for submission
+                              </span>
                             </div>
                           } @else {
                             <div class="text-center">
@@ -410,22 +381,8 @@
                           </div>
                         </div>
                       }
-                      
-                      <!-- Transcription Display -->
-                      @if (transcription()) {
-                        <div class="w-full text-left">
-                          <h4 class="text-surface-900 dark:text-surface-0 text-sm font-medium m-0 mb-2 flex items-center gap-2">
-                            <i class="pi pi-file-text text-primary"></i>
-                            Transcription
-                          </h4>
-                          <div class="bg-surface-100 dark:bg-surface-800 p-3 rounded-lg border border-surface-200 dark:border-surface-700 text-surface-900 dark:text-surface-0 text-sm leading-relaxed">
-                            {{ transcription() }}
-                          </div>
-                        </div>
-                      }
                     </div>
                   </div>
-                }
 
               <!-- Action Buttons -->
               <div class="mt-auto pt-6 border-t border-surface-200 dark:border-surface-700">
@@ -590,141 +547,287 @@
 
   <!-- Results Phase -->
   @if (currentStep() === 'results') {
-    <div class="results-phase">
-      <div class="page-header">
-        <h1>Interview Complete!</h1>
-        <p>
-          @if (sessionResult()) {
-            Here's your performance summary
-          } @else {
-            Analyzing your responses...
-          }
-        </p>
+    <div class="results-phase min-h-screen bg-gradient-to-br from-surface-50 to-surface-100 dark:from-surface-900 dark:to-surface-800 -mx-8 -my-6 px-8 py-8">
+      <!-- Success Header -->
+      <!-- Centered Completion Header -->
+      <div class="flex flex-col items-center text-center mb-8 max-w-4xl mx-auto">
+        <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-green-400 to-green-500 rounded-full mb-6 shadow-lg">
+          <i class="pi pi-check text-white text-3xl"></i>
+        </div>
+        <h1 class="text-4xl font-bold text-surface-900 dark:text-surface-0 mb-4">
+          🎉 Interview Complete!
+        </h1>
+        @if (sessionResult()) {
+          <p class="text-lg text-muted-color max-w-2xl leading-relaxed">
+            Great job! You've successfully completed your {{ settings().category }} interview. 
+            Here's your detailed performance analysis.
+          </p>
+        } @else {
+          <p class="text-lg text-muted-color leading-relaxed">
+            🤖 Our AI is analyzing your responses to provide detailed feedback...
+          </p>
+        }
       </div>
 
       @if (!sessionResult()) {
-        <!-- Loading State -->
-        <div class="text-center py-8">
-          <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-          <h3 class="text-lg font-medium text-color mb-2">Processing Your Results</h3>
-          <p class="text-color-secondary mb-4">This will just take a moment...</p>
+        <!-- Enhanced Loading State with Skip Option -->
+        <div class="flex justify-center">
+          <div class="card max-w-lg text-center">
+            <div class="mb-6">
+              <div class="inline-block animate-spin rounded-full h-16 w-16 border-4 border-primary border-r-transparent"></div>
+            </div>
+            <h3 class="text-xl font-semibold text-surface-900 dark:text-surface-0 mb-3">🤖 AI Evaluation in Progress</h3>
+            <p class="text-muted-color mb-6 leading-relaxed">
+              Our AI is analyzing your responses to provide detailed feedback and scoring. 
+              You can continue exploring while this completes.
+            </p>
+            
+            <div class="bg-surface-100 dark:bg-surface-800 rounded-lg p-4 mb-6">
+              <div class="flex items-center justify-center gap-2 text-sm text-muted-color mb-2">
+                <i class="pi pi-clock"></i>
+                Estimated time: 30-60 seconds
+              </div>
+              <div class="text-xs text-muted-color">
+                Results will be available in Interview History once complete
+              </div>
+            </div>
+
+            <!-- Quick Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-3 justify-center">
+              <p-button 
+                label="View Interview History"
+                icon="pi pi-history"
+                (click)="navigateToHistory()"
+                severity="secondary"
+                size="small" />
+              <p-button 
+                label="Start New Interview"
+                icon="pi pi-plus"
+                (click)="startNewInterview()"
+                size="small" />
+            </div>
+          </div>
         </div>
       }
 
       @if (sessionResult()) {
-        <div class="grid grid-cols-12 gap-8">
-          <!-- Overall Score -->
-          <div class="col-span-12 md:col-span-4">
-            <div class="card mb-0">
-              <div class="text-center">
-                <div class="text-4xl font-bold text-primary mb-2">
-                  {{ sessionResult()!.overallScore }}%
-                </div>
-                <div class="text-sm text-color-secondary">Overall Score</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Questions Stats -->
-          <div class="col-span-12 md:col-span-4">
-            <div class="card mb-0">
-              <div class="font-semibold text-xl mb-4">Questions</div>
-              <div class="flex flex-column gap-2">
-                <div class="flex justify-content-between">
-                  <span class="text-sm text-color-secondary">Total:</span>
-                  <span class="text-sm font-medium">{{ sessionResult()!.totalQuestions }}</span>
-                </div>
-                <div class="flex justify-content-between">
-                  <span class="text-sm text-color-secondary">Answered:</span>
-                  <span class="text-sm font-medium text-green-600">{{ sessionResult()!.answeredQuestions }}</span>
-                </div>
-                <div class="flex justify-content-between">
-                  <span class="text-sm text-color-secondary">Skipped:</span>
-                  <span class="text-sm font-medium text-orange-600">{{ sessionResult()!.skippedQuestions }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Performance -->
-          <div class="col-span-12 md:col-span-4">
-            <div class="card mb-0">
-              <div class="font-semibold text-xl mb-4">Performance</div>
-              <div class="flex flex-column gap-2">
-                <div class="flex justify-content-between">
-                  <span class="text-sm text-color-secondary">Completion:</span>
-                  <span class="text-sm font-medium">{{ Math.round((sessionResult()!.answeredQuestions / sessionResult()!.totalQuestions) * 100) }}%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Strengths & Improvements -->
-          @if (sessionResult()!.strengthAreas.length > 0 || sessionResult()!.improvementAreas.length > 0) {
-            <div class="col-span-12 lg:col-span-6">
+        <!-- Enhanced Results Layout -->
+        <div class="max-w-7xl mx-auto">
+          
+          <!-- Top Performance Cards - Sakai NG Style -->
+          <div class="grid grid-cols-12 gap-8 mb-8">
+            <!-- Overall Score Card -->
+            <div class="col-span-12 lg:col-span-6 xl:col-span-3">
               <div class="card mb-0">
-                <div class="font-semibold text-xl mb-4">Performance Analysis</div>
-                <div class="flex flex-column gap-4">
-                  @if (sessionResult()!.strengthAreas.length > 0) {
-                    <div>
-                      <h4 class="font-medium text-green-700 mb-2">Strengths</h4>
-                      <div class="flex flex-column gap-1">
-                        @for (strength of sessionResult()!.strengthAreas; track strength) {
-                          <div class="text-sm text-green-700 bg-green-50 px-2 py-1 border-round">
-                            {{ strength }}
-                          </div>
-                        }
-                      </div>
-                    </div>
-                  }
-
-                  @if (sessionResult()!.improvementAreas.length > 0) {
-                    <div>
-                      <h4 class="font-medium text-orange-700 mb-2">Areas for Improvement</h4>
-                      <div class="flex flex-column gap-1">
-                        @for (improvement of sessionResult()!.improvementAreas; track improvement) {
-                          <div class="text-sm text-orange-700 bg-orange-50 px-2 py-1 border-round">
-                            {{ improvement }}
-                          </div>
-                        }
-                      </div>
-                    </div>
-                  }
+                <div class="flex justify-between mb-4">
+                  <div>
+                    <span class="block text-muted-color font-medium mb-4">Overall Score</span>
+                    <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ sessionResult()!.overallScore }}%</div>
+                  </div>
+                  <div class="flex items-center justify-center bg-blue-100 dark:bg-blue-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
+                    <i class="pi pi-star text-blue-500 text-xl"></i>
+                  </div>
                 </div>
+                <span class="text-primary font-medium">{{ sessionResult()!.answeredQuestions }} </span>
+                <span class="text-muted-color">questions answered</span>
               </div>
             </div>
-          }
 
-          <!-- Recommendations -->
-          @if (sessionResult()!.recommendations.length > 0) {
-            <div class="col-span-12 lg:col-span-6">
+            <!-- Questions Summary Card -->
+            <div class="col-span-12 lg:col-span-6 xl:col-span-3">
               <div class="card mb-0">
-                <div class="font-semibold text-xl mb-4">Recommendations</div>
-                <div class="flex flex-column gap-2">
-                  @for (rec of sessionResult()!.recommendations; track rec) {
-                    <div class="text-sm text-color border-left-2 border-primary pl-3">
-                      {{ rec }}
+                <div class="flex justify-between mb-4">
+                  <div>
+                    <span class="block text-muted-color font-medium mb-4">Questions</span>
+                    <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ sessionResult()!.answeredQuestions }}/{{ sessionResult()!.totalQuestions }}</div>
+                  </div>
+                  <div class="flex items-center justify-center bg-green-100 dark:bg-green-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
+                    <i class="pi pi-check-circle text-green-500 text-xl"></i>
+                  </div>
+                </div>
+                <span class="text-primary font-medium">{{ sessionResult()!.skippedQuestions }} </span>
+                <span class="text-muted-color">skipped</span>
+              </div>
+            </div>
+
+            <!-- Duration Card -->
+            <div class="col-span-12 lg:col-span-6 xl:col-span-3">
+              <div class="card mb-0">
+                <div class="flex justify-between mb-4">
+                  <div>
+                    <span class="block text-muted-color font-medium mb-4">Duration</span>
+                    <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ formatTime(sessionTime()) }}</div>
+                  </div>
+                  <div class="flex items-center justify-center bg-orange-100 dark:bg-orange-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
+                    <i class="pi pi-clock text-orange-500 text-xl"></i>
+                  </div>
+                </div>
+                <span class="text-primary font-medium">{{ settings().difficulty }} </span>
+                <span class="text-muted-color">difficulty level</span>
+              </div>
+            </div>
+
+            <!-- Technology Card -->
+            <div class="col-span-12 lg:col-span-6 xl:col-span-3">
+              <div class="card mb-0">
+                <div class="flex justify-between mb-4">
+                  <div>
+                    <span class="block text-muted-color font-medium mb-4">Technology</span>
+                    <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ settings().category }}</div>
+                  </div>
+                  <div class="flex items-center justify-center bg-purple-100 dark:bg-purple-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
+                    <i class="pi pi-code text-purple-500 text-xl"></i>
+                  </div>
+                </div>
+                <span class="text-primary font-medium">{{ Math.round((sessionResult()!.answeredQuestions / sessionResult()!.totalQuestions) * 100) }}% </span>
+                <span class="text-muted-color">completion rate</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Detailed Analysis Section -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Strengths & Improvements -->
+            @if (sessionResult()!.strengthAreas.length > 0 || sessionResult()!.improvementAreas.length > 0) {
+              <div class="card mb-0">
+                <div class="flex items-center gap-2 mb-6">
+                  <i class="pi pi-chart-line text-primary text-xl"></i>
+                  <h3 class="text-xl font-semibold text-surface-900 dark:text-surface-0 m-0">Performance Analysis</h3>
+                </div>
+                
+                @if (sessionResult()!.strengthAreas.length > 0) {
+                  <div class="mb-6">
+                    <h4 class="flex items-center gap-2 text-green-700 dark:text-green-400 font-semibold mb-3">
+                      <i class="pi pi-thumbs-up"></i>
+                      Strengths
+                    </h4>
+                    <div class="space-y-2">
+                      @for (strength of sessionResult()!.strengthAreas; track strength) {
+                        <div class="flex items-start gap-2 p-3 bg-green-50 dark:bg-green-400/10 rounded-lg border border-green-200 dark:border-green-800">
+                          <i class="pi pi-check-circle text-green-600 dark:text-green-400 mt-0.5"></i>
+                          <span class="text-sm text-green-800 dark:text-green-200">{{ strength }}</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+
+                @if (sessionResult()!.improvementAreas.length > 0) {
+                  <div>
+                    <h4 class="flex items-center gap-2 text-orange-700 dark:text-orange-400 font-semibold mb-3">
+                      <i class="pi pi-exclamation-triangle"></i>
+                      Areas for Improvement
+                    </h4>
+                    <div class="space-y-2">
+                      @for (improvement of sessionResult()!.improvementAreas; track improvement) {
+                        <div class="flex items-start gap-2 p-3 bg-orange-50 dark:bg-orange-400/10 rounded-lg border border-orange-200 dark:border-orange-800">
+                          <i class="pi pi-info-circle text-orange-600 dark:text-orange-400 mt-0.5"></i>
+                          <span class="text-sm text-orange-800 dark:text-orange-200">{{ improvement }}</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Recommendations -->
+            @if (sessionResult()!.recommendations.length > 0) {
+              <div class="card mb-0">
+                <div class="flex items-center gap-2 mb-6">
+                  <i class="pi pi-lightbulb text-primary text-xl"></i>
+                  <h3 class="text-xl font-semibold text-surface-900 dark:text-surface-0 m-0">Next Steps</h3>
+                </div>
+                <div class="space-y-3">
+                  @for (rec of sessionResult()!.recommendations; track $index; let i = $index) {
+                    <div class="flex items-start gap-3 p-4 bg-surface-50 dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
+                      <div class="flex-shrink-0 w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold mt-0.5">
+                        {{ i + 1 }}
+                      </div>
+                      <span class="text-sm text-surface-700 dark:text-surface-300">{{ rec }}</span>
                     </div>
                   }
                 </div>
               </div>
-            </div>
-          }
-        </div>
+            }
+          </div>
 
-        <!-- Actions -->
-        <div class="flex justify-content-center gap-4 mt-6">
-          <p-button 
-            label="Start New Interview" 
-            icon="pi pi-refresh"
-            (onClick)="startNewInterview()">
-          </p-button>
-          <p-button 
-            label="Back to Dashboard" 
-            icon="pi pi-home"
-            severity="secondary"
-            (onClick)="goToDashboard()">
-          </p-button>
+          <!-- Action Section -->
+          <div class="card mb-0">
+            <div class="text-center mb-8">
+              <h3 class="text-2xl font-bold text-surface-900 dark:text-surface-0 mb-3">What's Next?</h3>
+              <p class="text-muted-color max-w-2xl mx-auto">Choose how you'd like to continue your learning journey</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <!-- View Detailed Results -->
+              <div class="group cursor-pointer p-6 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-400/10 dark:to-blue-500/10 hover:shadow-lg transition-all duration-300 border border-blue-200 dark:border-blue-800"
+                   (click)="viewDetailedResults()">
+                <div class="text-center">
+                  <div class="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                    <i class="pi pi-file-text text-white text-xl"></i>
+                  </div>
+                  <h4 class="font-semibold text-blue-900 dark:text-blue-100 mb-1">Detailed Results</h4>
+                  <p class="text-xs text-blue-700 dark:text-blue-300">Review each answer & AI feedback</p>
+                </div>
+              </div>
+
+              <!-- View Progress -->
+              <div class="group cursor-pointer p-6 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-400/10 dark:to-purple-500/10 hover:shadow-lg transition-all duration-300 border border-purple-200 dark:border-purple-800"
+                   (click)="goToProgress()">
+                <div class="text-center">
+                  <div class="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                    <i class="pi pi-chart-line text-white text-xl"></i>
+                  </div>
+                  <h4 class="font-semibold text-purple-900 dark:text-purple-100 mb-1">View Progress</h4>
+                  <p class="text-xs text-purple-700 dark:text-purple-300">Track your improvement over time</p>
+                </div>
+              </div>
+
+              <!-- Start New Interview -->
+              <div class="group cursor-pointer p-6 rounded-xl bg-gradient-to-br from-green-50 to-green-100 dark:from-green-400/10 dark:to-green-500/10 hover:shadow-lg transition-all duration-300 border border-green-200 dark:border-green-800"
+                   (click)="startNewInterview()">
+                <div class="text-center">
+                  <div class="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                    <i class="pi pi-refresh text-white text-xl"></i>
+                  </div>
+                  <h4 class="font-semibold text-green-900 dark:text-green-100 mb-1">New Interview</h4>
+                  <p class="text-xs text-green-700 dark:text-green-300">Practice with more questions</p>
+                </div>
+              </div>
+
+              <!-- Back to Dashboard -->
+              <div class="group cursor-pointer p-6 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-surface-700 dark:to-surface-600 hover:shadow-lg transition-all duration-300 border border-surface-200 dark:border-surface-600"
+                   (click)="goToDashboard()">
+                <div class="text-center">
+                  <div class="w-12 h-12 bg-surface-500 rounded-lg flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                    <i class="pi pi-home text-white text-xl"></i>
+                  </div>
+                  <h4 class="font-semibold text-surface-900 dark:text-surface-100 mb-1">Dashboard</h4>
+                  <p class="text-xs text-surface-700 dark:text-surface-300">Return to main dashboard</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Primary Actions -->
+            <div class="flex flex-col sm:flex-row justify-center gap-4 pt-4 border-t border-surface-200 dark:border-surface-700">
+              <p-button 
+                label="View Detailed Analysis"
+                icon="pi pi-eye"
+                size="large"
+                class="px-8 py-3"
+                (onClick)="viewDetailedResults()">
+              </p-button>
+              <p-button 
+                label="Start New Interview" 
+                icon="pi pi-plus"
+                severity="secondary"
+                size="large"
+                class="px-8 py-3"
+                (onClick)="startNewInterview()">
+              </p-button>
+            </div>
+          </div>
         </div>
       }
     </div>
@@ -746,26 +849,10 @@
   }
 
   <!-- End Session Dialog -->
-  <p-dialog 
-    header="End Interview Session" 
+  <app-confirmation-dialog
     [visible]="showEndDialog()"
-    (onHide)="showEndDialog.set(false)"
-    [modal]="true"
-    [style]="{width: '400px'}">
-    <p class="mb-4">Are you sure you want to end the current interview session? Your progress will be saved.</p>
-    <div class="flex justify-content-end gap-2">
-      <p-button 
-        label="Cancel" 
-        severity="secondary"
-        size="small"
-        (onClick)="showEndDialog.set(false)">
-      </p-button>
-      <p-button 
-        label="End Session" 
-        severity="danger"
-        size="small"
-        (onClick)="endInterview()">
-      </p-button>
-    </div>
-  </p-dialog>
+    [config]="endDialogConfig()"
+    (onConfirm)="endInterview()"
+    (onCancel)="showEndDialog.set(false)">
+  </app-confirmation-dialog>
 </div>

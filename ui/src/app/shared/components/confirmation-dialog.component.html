@@ -1,0 +1,43 @@
+<p-dialog 
+  [header]="config().title"
+  [visible]="visible()"
+  (onHide)="handleCancel()"
+  [modal]="true"
+  [style]="{width: config().width || '450px'}"
+  [closable]="true"
+  [resizable]="false"
+  [draggable]="false">
+  
+  <div class="dialog-content">
+    @if (config().icon) {
+      <div class="flex items-center gap-3">
+        <div class="flex-shrink-0 flex items-center justify-center">
+          <i [class]="config().icon + ' text-xl text-orange-500'"></i>
+        </div>
+        <div class="flex-1">
+          <p class="text-surface-900 dark:text-surface-0 m-0 leading-relaxed">{{ config().message }}</p>
+        </div>
+      </div>
+    } @else {
+      <p class="text-surface-900 dark:text-surface-0 m-0 leading-relaxed">{{ config().message }}</p>
+    }
+  </div>
+
+  <ng-template pTemplate="footer">
+    <div class="flex justify-end gap-2">
+      <p-button 
+        [label]="config().cancelLabel || 'Cancel'"
+        severity="secondary"
+        outlined
+        size="small"
+        (onClick)="handleCancel()">
+      </p-button>
+      <p-button 
+        [label]="config().confirmLabel || 'Confirm'"
+        [severity]="config().confirmSeverity || 'primary'"
+        size="small"
+        (onClick)="handleConfirm()">
+      </p-button>
+    </div>
+  </ng-template>
+</p-dialog>

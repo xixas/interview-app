@@ -9,9 +9,9 @@ import { QuestionDifficulty } from '@interview-app/shared-interfaces';
 @Injectable()
 export class QuestionsService {
   constructor(
-    @InjectRepository(Question)
+    @InjectRepository(Question, 'questionsConnection')
     private readonly questionRepository: Repository<Question>,
-    @InjectRepository(Tech)
+    @InjectRepository(Tech, 'questionsConnection')
     private readonly techRepository: Repository<Tech>,
   ) {}
 

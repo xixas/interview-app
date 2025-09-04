@@ -1,0 +1,333 @@
+:host {
+  display: block;
+  
+  .page-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .question-details {
+    .p-3 {
+      padding: 0.75rem;
+    }
+
+    .bg-surface-100 {
+      background-color: var(--surface-100);
+    }
+
+    .dark .bg-surface-100 {
+      background-color: var(--surface-800);
+    }
+
+    .bg-blue-50 {
+      background-color: rgba(59, 130, 246, 0.1);
+    }
+
+    .bg-green-50 {
+      background-color: rgba(16, 185, 129, 0.1);
+    }
+
+    .bg-orange-50 {
+      background-color: rgba(245, 158, 11, 0.1);
+    }
+
+    .border-l-4 {
+      border-left-width: 4px;
+    }
+
+    .border-blue-500 {
+      border-color: rgb(59, 130, 246);
+    }
+
+    .border-green-500 {
+      border-color: rgb(16, 185, 129);
+    }
+
+    .border-orange-500 {
+      border-color: rgb(245, 158, 11);
+    }
+  }
+
+  .p-accordion {
+    .p-accordion-header {
+      margin: 0;
+      border-radius: 0.5rem;
+      
+      &:not(:first-child) {
+        margin-top: 0.5rem;
+      }
+    }
+
+    .p-accordion-content {
+      padding: 1.5rem;
+      border-radius: 0 0 0.5rem 0.5rem;
+    }
+
+    .p-accordion-toggle-icon {
+      margin-left: auto;
+    }
+  }
+
+  .p-tabview {
+    .p-tabview-nav {
+      border-bottom: 1px solid var(--surface-border);
+      
+      .p-tabview-nav-link {
+        padding: 1rem 1.5rem;
+        margin-right: 0.5rem;
+        border-radius: 0.5rem 0.5rem 0 0;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s ease;
+
+        &:hover {
+          background-color: var(--surface-hover);
+        }
+
+        &.p-tabview-nav-link-active {
+          border-bottom-color: var(--primary-color);
+          background-color: var(--surface-card);
+        }
+      }
+    }
+
+    .p-tabview-panels {
+      padding: 1.5rem;
+    }
+  }
+
+  .space-y-3 > * + * {
+    margin-top: 0.75rem;
+  }
+
+  .space-y-4 > * + * {
+    margin-top: 1rem;
+  }
+
+  .performance-card {
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    background: var(--surface-card);
+    border: 1px solid var(--surface-border);
+    box-shadow: var(--shadow-base);
+    transition: box-shadow 0.2s ease;
+
+    &:hover {
+      box-shadow: var(--shadow-md);
+    }
+  }
+
+  .insight-card {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 0.5rem;
+    
+    &.strength {
+      background-color: rgba(16, 185, 129, 0.1);
+      border-left: 4px solid rgb(16, 185, 129);
+    }
+
+    &.improvement {
+      background-color: rgba(245, 158, 11, 0.1);
+      border-left: 4px solid rgb(245, 158, 11);
+    }
+
+    &.info {
+      background-color: rgba(59, 130, 246, 0.1);
+      border-left: 4px solid rgb(59, 130, 246);
+    }
+  }
+
+  .chart-container {
+    position: relative;
+    height: 300px;
+  }
+
+  .score-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+    
+    .score-item {
+      text-align: center;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      background: var(--surface-section);
+      
+      .score-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+      }
+
+      .score-label {
+        font-size: 0.875rem;
+        color: var(--text-color-secondary);
+      }
+    }
+  }
+
+  .recommendation-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 1rem;
+    background-color: rgba(59, 130, 246, 0.1);
+    border-radius: 0.5rem;
+    border-left: 4px solid rgb(59, 130, 246);
+    margin-bottom: 1rem;
+
+    .step-number {
+      width: 2rem;
+      height: 2rem;
+      background-color: rgb(59, 130, 246);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.875rem;
+      font-weight: 700;
+      margin-right: 1rem;
+      flex-shrink: 0;
+    }
+  }
+
+  .next-steps-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    background: var(--surface-section);
+    border-radius: 0.5rem;
+    margin-bottom: 0.75rem;
+    transition: background-color 0.2s ease;
+
+    &:hover {
+      background: var(--surface-hover);
+    }
+
+    .step-icon {
+      margin-right: 0.75rem;
+      font-size: 1.25rem;
+    }
+
+    .step-content {
+      .step-title {
+        font-weight: 500;
+        color: var(--text-color);
+        margin-bottom: 0.25rem;
+      }
+
+      .step-description {
+        font-size: 0.875rem;
+        color: var(--text-color-secondary);
+      }
+    }
+  }
+
+  // Loading skeletons
+  .p-skeleton {
+    border-radius: 0.5rem;
+  }
+
+  // Empty states
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-color-secondary);
+
+    .pi {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      display: block;
+    }
+
+    .empty-title {
+      font-size: 1.125rem;
+      margin-bottom: 0.5rem;
+      color: var(--text-color);
+    }
+
+    .empty-message {
+      font-size: 0.875rem;
+    }
+  }
+
+  // Color utilities
+  .text-blue-600 { color: rgb(37, 99, 235); }
+  .text-green-600 { color: rgb(22, 163, 74); }
+  .text-purple-600 { color: rgb(147, 51, 234); }
+  .text-orange-600 { color: rgb(234, 88, 12); }
+  
+  .text-blue-500 { color: rgb(59, 130, 246); }
+  .text-green-500 { color: rgb(16, 185, 129); }
+  .text-purple-500 { color: rgb(168, 85, 247); }
+  .text-orange-500 { color: rgb(245, 158, 11); }
+
+  .text-green-400 { color: rgb(74, 222, 128); }
+  .text-orange-400 { color: rgb(251, 191, 36); }
+  .text-blue-400 { color: rgb(96, 165, 250); }
+
+  .dark {
+    .text-blue-600 { color: rgb(96, 165, 250); }
+    .text-green-600 { color: rgb(74, 222, 128); }
+    .text-purple-600 { color: rgb(196, 181, 253); }
+    .text-orange-600 { color: rgb(251, 191, 36); }
+  }
+}
+
+// Responsive design
+@media (max-width: 768px) {
+  :host {
+    .page-actions {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.75rem;
+
+      .p-button {
+        width: 100%;
+      }
+    }
+
+    .p-tabview .p-tabview-nav {
+      flex-wrap: wrap;
+      
+      .p-tabview-nav-link {
+        margin-bottom: 0.5rem;
+      }
+    }
+
+    .score-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  :host {
+    .p-8 {
+      padding: 1rem;
+    }
+
+    .grid {
+      .col-span-12 {
+        &.md\\:col-span-6,
+        &.lg\\:col-span-3,
+        &.lg\\:col-span-4,
+        &.lg\\:col-span-8 {
+          grid-column: span 12;
+        }
+      }
+    }
+
+    .recommendation-item {
+      flex-direction: column;
+      text-align: center;
+
+      .step-number {
+        margin-right: 0;
+        margin-bottom: 0.75rem;
+      }
+    }
+  }
+}

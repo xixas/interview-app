@@ -7,12 +7,14 @@ import * as os from 'os';
 // Import database and evaluator services
 import { DatabaseService } from '../services/database.service';
 import { EvaluatorService } from '../services/evaluator.service';
+import { InterviewSessionService } from '../services/interview-session.service';
 
 export class IPCHandlers {
   private settings: Map<string, any> = new Map();
   private settingsPath: string;
   private databaseService: DatabaseService;
   private evaluatorService: EvaluatorService;
+  private interviewSessionService: InterviewSessionService;
 
   constructor() {
     this.settingsPath = join(app.getPath('userData'), 'settings.json');
@@ -20,6 +22,8 @@ export class IPCHandlers {
     this.loadSettings();
     // Pass settings reference to evaluator service for API key access
     this.evaluatorService = new EvaluatorService('http://localhost:3001', this.settings);
+    // Initialize interview session service with API base URL
+    this.interviewSessionService = new InterviewSessionService(this.settings.get('apiUrl') || 'http://localhost:3000');
     this.registerHandlers();
   }
 
@@ -68,7 +72,13 @@ export class IPCHandlers {
       'db-get-questions-by-technology',
       // Evaluator IPC channels
       'evaluator-transcribe', 'evaluator-evaluate-answer', 'evaluator-evaluate-audio-answer',
-      'evaluator-batch-evaluate', 'evaluator-generate-summary', 'evaluator-validate-key'
+      'evaluator-batch-evaluate', 'evaluator-generate-summary', 'evaluator-validate-key',
+      // Interview Session IPC channels
+      'interview-session-create', 'interview-session-get', 'interview-session-update-progress',
+      'interview-session-complete', 'interview-session-create-response', 'interview-session-update-evaluation',
+      'interview-session-get-history', 'interview-session-get-details', 'interview-session-delete',
+      'interview-session-get-statistics', 'interview-session-export', 'interview-session-import',
+      'interview-session-clear-all'
     ];
     
     channels.forEach(channel => {
@@ -490,6 +500,163 @@ export class IPCHandlers {
       }
     });
 
+    // Interview Session IPC handlers
+    ipcMain.handle('interview-session-create', async (_, data) => {
+      try {
+        console.log('IPC Handler: interview-session-create called with data:', data);
+        const session = await this.interviewSessionService.createSession(data);
+        console.log('IPC Handler: Session created successfully:', session);
+        return { success: true, data: session };
+      } catch (error: any) {
+        console.error('IPC Handler: Failed to create session:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('interview-session-get', async (_, sessionId) => {
+      try {
+        console.log('IPC Handler: interview-session-get called with sessionId:', sessionId);
+        const session = await this.interviewSessionService.getSession(sessionId);
+        console.log('IPC Handler: Session retrieved:', session ? 'found' : 'not found');
+        return { success: true, data: session };
+      } catch (error: any) {
+        console.error('IPC Handler: Failed to get session:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('interview-session-update-progress', async (_, sessionId, completedQuestions) => {
+      try {
+        console.log('IPC Handler: interview-session-update-progress called:', { sessionId, completedQuestions });
+        await this.interviewSessionService.updateSessionProgress(sessionId, completedQuestions);
+        console.log('IPC Handler: Session progress updated successfully');
+        return { success: true };
+      } catch (error: any) {
+        console.error('IPC Handler: Failed to update session progress:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('interview-session-complete', async (_, sessionId, data) => {
+      try {
+        console.log('IPC Handler: interview-session-complete called:', { sessionId, data });
+        await this.interviewSessionService.completeSession(sessionId, data);
+        console.log('IPC Handler: Session completed successfully');
+        return { success: true };
+      } catch (error: any) {
+        console.error('IPC Handler: Failed to complete session:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('interview-session-create-response', async (_, data) => {
+      try {
+        console.log('IPC Handler: interview-session-create-response called with data:', data);
+        const response = await this.interviewSessionService.createResponse(data);
+        console.log('IPC Handler: Response created successfully:', response);
+        return { success: true, data: response };
+      } catch (error: any) {
+        console.error('IPC Handler: Failed to create response:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('interview-session-update-evaluation', async (_, responseId, evaluation) => {
+      try {
+        console.log('IPC Handler: interview-session-update-evaluation called:', { responseId, evaluation });
+        await this.interviewSessionService.updateResponseEvaluation(responseId, evaluation);
+        console.log('IPC Handler: Response evaluation updated successfully');
+        return { success: true };
+      } catch (error: any) {
+        console.error('IPC Handler: Failed to update response evaluation:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('interview-session-get-history', async (_, limit, offset) => {
+      try {
+        console.log('IPC Handler: interview-session-get-history called:', { limit, offset });
+        const history = await this.interviewSessionService.getSessionHistory(limit, offset);
+        console.log('IPC Handler: Session history retrieved:', history.length, 'sessions');
+        return { success: true, data: history };
+      } catch (error: any) {
+        console.error('IPC Handler: Failed to get session history:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('interview-session-get-details', async (_, sessionId) => {
+      try {
+        console.log('IPC Handler: interview-session-get-details called with sessionId:', sessionId);
+        const details = await this.interviewSessionService.getSessionDetails(sessionId);
+        console.log('IPC Handler: Session details retrieved:', details ? 'found' : 'not found');
+        return { success: true, data: details };
+      } catch (error: any) {
+        console.error('IPC Handler: Failed to get session details:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('interview-session-delete', async (_, sessionId) => {
+      try {
+        console.log('IPC Handler: interview-session-delete called with sessionId:', sessionId);
+        await this.interviewSessionService.deleteSession(sessionId);
+        console.log('IPC Handler: Session deleted successfully');
+        return { success: true };
+      } catch (error: any) {
+        console.error('IPC Handler: Failed to delete session:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('interview-session-get-statistics', async () => {
+      try {
+        console.log('IPC Handler: interview-session-get-statistics called');
+        const statistics = await this.interviewSessionService.getStatistics();
+        console.log('IPC Handler: Statistics retrieved successfully');
+        return { success: true, data: statistics };
+      } catch (error: any) {
+        console.error('IPC Handler: Failed to get statistics:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('interview-session-export', async () => {
+      try {
+        console.log('IPC Handler: interview-session-export called');
+        const exportData = await this.interviewSessionService.exportUserData();
+        console.log('IPC Handler: User data exported successfully');
+        return { success: true, data: exportData };
+      } catch (error: any) {
+        console.error('IPC Handler: Failed to export user data:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('interview-session-import', async (_, data) => {
+      try {
+        console.log('IPC Handler: interview-session-import called');
+        const importResult = await this.interviewSessionService.importUserData(data);
+        console.log('IPC Handler: User data imported successfully:', importResult);
+        return { success: true, data: importResult };
+      } catch (error: any) {
+        console.error('IPC Handler: Failed to import user data:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle('interview-session-clear-all', async () => {
+      try {
+        console.log('IPC Handler: interview-session-clear-all called');
+        await this.interviewSessionService.clearAllData();
+        console.log('IPC Handler: All user data cleared successfully');
+        return { success: true };
+      } catch (error: any) {
+        console.error('IPC Handler: Failed to clear all user data:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
     // Auto-updater (placeholder - would need actual implementation)
     ipcMain.handle('updater-check', () => {
       // Placeholder for auto-updater check
@@ -539,7 +706,13 @@ export class IPCHandlers {
       'db-initialize', 'db-get-technologies', 'db-get-random-questions', 
       'db-get-questions-by-technology', 'evaluator-transcribe', 
       'evaluator-evaluate-answer', 'evaluator-evaluate-audio-answer',
-      'evaluator-batch-evaluate', 'evaluator-generate-summary', 'evaluator-validate-key'
+      'evaluator-batch-evaluate', 'evaluator-generate-summary', 'evaluator-validate-key',
+      // Interview Session IPC channels
+      'interview-session-create', 'interview-session-get', 'interview-session-update-progress',
+      'interview-session-complete', 'interview-session-create-response', 'interview-session-update-evaluation',
+      'interview-session-get-history', 'interview-session-get-details', 'interview-session-delete',
+      'interview-session-get-statistics', 'interview-session-export', 'interview-session-import',
+      'interview-session-clear-all'
     ];
     
     channels.forEach(channel => {

@@ -1,0 +1,493 @@
+<div class="p-8">
+  @if (isLoading()) {
+    <!-- Loading Skeleton -->
+    <div class="mb-6">
+      <p-skeleton height="3rem" class="mb-4"></p-skeleton>
+      <p-skeleton height="1.5rem" width="60%"></p-skeleton>
+    </div>
+    
+    <div class="grid grid-cols-12 gap-6 mb-6">
+      @for (item of [1,2,3,4]; track item) {
+        <div class="col-span-12 md:col-span-6 lg:col-span-3">
+          <div class="card mb-0">
+            <p-skeleton height="6rem"></p-skeleton>
+          </div>
+        </div>
+      }
+    </div>
+    
+    <div class="card mb-0">
+      <p-skeleton height="400px"></p-skeleton>
+    </div>
+
+  } @else if (errorMessage()) {
+    <p-message severity="error" [text]="errorMessage()" class="mb-4"></p-message>
+    <div class="text-center">
+      <p-button 
+        label="Back to History" 
+        icon="pi pi-arrow-left" 
+        (click)="goBack()" />
+    </div>
+
+  } @else {
+    @if (session(); as sessionData) {
+    <!-- Page Header -->
+    <div class="flex items-start gap-4 mb-6">
+      <div class="w-14 h-14 bg-primary text-white rounded-lg flex items-center justify-center">
+        <i class="pi pi-chart-line text-2xl"></i>
+      </div>
+      <div class="flex-grow">
+        <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0 mb-1">
+          {{ sessionData.technology }} Interview Results
+        </h1>
+        <p class="text-sm text-muted-color mb-4">
+          Completed {{ formatDate(sessionData.completedAt || sessionData.startedAt) }} • {{ sessionData.totalQuestions }} questions
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <p-button
+            label="Back to History"
+            icon="pi pi-arrow-left"
+            (click)="goBack()"
+            severity="secondary"
+            size="small" />
+          <p-button
+            label="Export Results"
+            icon="pi pi-download"
+            (click)="exportSession()"
+            severity="secondary"
+            size="small" />
+          <p-button
+            label="Retake Interview"
+            icon="pi pi-refresh"
+            (click)="retakeInterview()"
+            size="small" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-12 gap-6 mb-6">
+      <div class="col-span-12 md:col-span-6 lg:col-span-3">
+        <div class="card mb-0">
+          <div class="flex items-center">
+            <div class="w-14 h-14 bg-blue-500 text-white rounded-lg flex items-center justify-center mr-4">
+              <i class="pi pi-chart-pie text-2xl"></i>
+            </div>
+            <div>
+              <div class="text-2xl font-bold text-surface-900 dark:text-surface-0">
+                {{ sessionData.percentage || 0 }}%
+              </div>
+              <div class="text-muted-color text-sm">Overall Score</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-span-12 md:col-span-6 lg:col-span-3">
+        <div class="card mb-0">
+          <div class="flex items-center">
+            <div class="w-14 h-14 bg-green-500 text-white rounded-lg flex items-center justify-center mr-4">
+              <i class="pi pi-check text-2xl"></i>
+            </div>
+            <div>
+              <div class="text-2xl font-bold text-surface-900 dark:text-surface-0">
+                {{ sessionData.completedQuestions }}/{{ sessionData.totalQuestions }}
+              </div>
+              <div class="text-muted-color text-sm">Questions Completed</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-span-12 md:col-span-6 lg:col-span-3">
+        <div class="card mb-0">
+          <div class="flex items-center">
+            <div class="w-14 h-14 bg-purple-500 text-white rounded-lg flex items-center justify-center mr-4">
+              <i class="pi pi-clock text-2xl"></i>
+            </div>
+            <div>
+              <div class="text-2xl font-bold text-surface-900 dark:text-surface-0">
+                {{ formatDuration(sessionData.durationSeconds || 0) }}
+              </div>
+              <div class="text-muted-color text-sm">Duration</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-span-12 md:col-span-6 lg:col-span-3">
+        <div class="card mb-0">
+          <div class="flex items-center">
+            <div class="w-14 h-14 bg-orange-500 text-white rounded-lg flex items-center justify-center mr-4">
+              <i class="pi pi-star text-2xl"></i>
+            </div>
+            <div>
+              <div class="text-2xl font-bold text-surface-900 dark:text-surface-0">
+                {{ getGradeFromPercentage(sessionData.percentage || 0) }}
+              </div>
+              <div class="text-muted-color text-sm">Grade</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Tabs -->
+    <div class="card mb-0">
+      <p-tabs value="0">
+        <p-tablist>
+          <p-tab value="0">Performance Overview</p-tab>
+          <p-tab value="1">Question by Question</p-tab>
+          <p-tab value="2">Recommendations</p-tab>
+        </p-tablist>
+        <p-tabpanels>
+        <!-- Performance Overview Tab -->
+        <p-tabpanel value="0">
+          <div class="grid grid-cols-12 gap-6">
+            <!-- Performance Chart -->
+            <div class="col-span-12 lg:col-span-8">
+              <div class="card mb-0">
+                <h3 class="text-surface-900 dark:text-surface-0 font-medium mb-4">Score by Criteria</h3>
+                @if (performanceChartData(); as chartData) {
+                  <p-chart 
+                    type="radar" 
+                    [data]="chartData" 
+                    [options]="chartOptions"
+                    height="300px">
+                  </p-chart>
+                } @else {
+                  <div class="text-center text-muted-color p-8">
+                    <i class="pi pi-info-circle text-4xl mb-4 block"></i>
+                    <div>No performance data available</div>
+                  </div>
+                }
+              </div>
+            </div>
+
+            <!-- Key Insights -->
+            <div class="col-span-12 lg:col-span-4">
+              <div class="card mb-0">
+                <h3 class="text-surface-900 dark:text-surface-0 font-medium mb-4">Key Insights</h3>
+                
+                @if (topStrengths().length > 0) {
+                  <div class="mb-4">
+                    <div class="font-medium text-green-600 dark:text-green-400 mb-2">
+                      <i class="pi pi-thumbs-up mr-2"></i>Top Strengths
+                    </div>
+                    @for (strength of topStrengths(); track strength) {
+                      <div class="mb-2 p-2 bg-green-50 dark:bg-green-900/10 rounded border-l-4 border-green-500">
+                        <div class="text-sm">{{ strength }}</div>
+                      </div>
+                    }
+                  </div>
+                }
+
+                @if (topImprovements().length > 0) {
+                  <div class="mb-4">
+                    <div class="font-medium text-orange-600 dark:text-orange-400 mb-2">
+                      <i class="pi pi-exclamation-triangle mr-2"></i>Areas to Improve
+                    </div>
+                    @for (improvement of topImprovements(); track improvement) {
+                      <div class="mb-2 p-2 bg-orange-50 dark:bg-orange-900/10 rounded border-l-4 border-orange-500">
+                        <div class="text-sm">{{ improvement }}</div>
+                      </div>
+                    }
+                  </div>
+                }
+
+                @if (averageResponseTime() > 0) {
+                  <div>
+                    <div class="font-medium text-blue-600 dark:text-blue-400 mb-2">
+                      <i class="pi pi-stopwatch mr-2"></i>Response Time
+                    </div>
+                    <div class="text-sm">
+                      Average: {{ formatDuration(averageResponseTime()) }} per question
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        </p-tabpanel>
+
+        <!-- Question by Question Tab -->
+        <p-tabpanel value="1">
+          @if (sessionData.responses && sessionData.responses.length > 0) {
+            <p-accordion value="0">
+              @for (response of sessionData.responses; track response.id; let i = $index) {
+                <p-accordion-panel [value]="i.toString()">
+                  <p-accordion-header>
+                    <div class="flex items-center justify-between w-full">
+                      <div class="flex items-center">
+                        <span class="font-medium mr-3">Question {{ i + 1 }}</span>
+                        @if (response.percentage !== null && response.percentage !== undefined) {
+                          <p-tag
+                            [value]="response.percentage + '%'"
+                            [severity]="getScoreSeverity(response.percentage)"
+                            [rounded]="true">
+                          </p-tag>
+                        } @else {
+                          <p-tag value="Not Evaluated" severity="secondary" [rounded]="true"></p-tag>
+                        }
+                      </div>
+                      @if (response.timeSpentSeconds) {
+                        <div class="text-muted-color text-sm">
+                          {{ formatDuration(response.timeSpentSeconds) }}
+                        </div>
+                      }
+                    </div>
+                  </p-accordion-header>
+
+                  <p-accordion-content>
+                    <div class="question-details">
+                    <!-- Question -->
+                    <div class="mb-4">
+                      <div class="font-medium text-surface-900 dark:text-surface-0 mb-2">Question</div>
+                      <div class="p-3 bg-surface-100 dark:bg-surface-800 rounded">
+                        {{ response.question?.question || 'Question not available' }}
+                      </div>
+                    </div>
+
+                    <!-- User Answer -->
+                    <div class="mb-4">
+                      @if (response.transcription?.text) {
+                        <!-- Audio Answer with Transcription -->
+                        <div class="font-medium text-surface-900 dark:text-surface-0 mb-2 flex items-center gap-2">
+                          <i class="pi pi-microphone text-green-600"></i>
+                          Your Answer (Audio Transcribed)
+                          @if (response.transcription?.duration) {
+                            <p-tag 
+                              [value]="formatDuration(response.transcription?.duration || 0)" 
+                              severity="info" 
+                              size="small">
+                              <i class="pi pi-clock text-xs mr-1"></i>
+                            </p-tag>
+                          }
+                        </div>
+                        <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border-l-4 border-blue-500">
+                          <div class="whitespace-pre-wrap text-surface-900 dark:text-surface-0 leading-relaxed">{{ response.transcription!.text }}</div>
+                        </div>
+                      } @else {
+                        <!-- Text or Placeholder Answer -->
+                        <div class="font-medium text-surface-900 dark:text-surface-0 mb-2">
+                          Your Answer
+                          @if (response.audioUrl) {
+                            <p-tag value="Audio Recording" severity="info" size="small" class="ml-2">
+                              <i class="pi pi-microphone text-xs mr-1"></i>
+                              Processing...
+                            </p-tag>
+                          }
+                        </div>
+                        <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border-l-4 border-blue-500">
+                          @if (response.answer && response.answer !== 'Audio answer submitted') {
+                            <div class="whitespace-pre-wrap text-surface-900 dark:text-surface-0 leading-relaxed">{{ response.answer }}</div>
+                          } @else if (response.audioUrl && response.evaluatedAt) {
+                            <div class="text-muted-color italic">Audio evaluation completed but transcription unavailable</div>
+                          } @else if (response.audioUrl) {
+                            <div class="text-muted-color italic flex items-center gap-2">
+                              <i class="pi pi-spin pi-spinner"></i>
+                              Audio evaluation in progress...
+                            </div>
+                          } @else {
+                            <div class="text-muted-color italic">No answer provided</div>
+                          }
+                        </div>
+                      }
+                    </div>
+
+                    <!-- Reference Answer -->
+                    @if (response.question?.answer) {
+                      <div class="mb-4">
+                        <div class="font-medium text-surface-900 dark:text-surface-0 mb-2">Reference Answer</div>
+                        <div class="p-3 bg-green-50 dark:bg-green-900/10 rounded border-l-4 border-green-500">
+                          {{ response.question?.answer }}
+                        </div>
+                      </div>
+                    }
+
+                    <!-- Evaluation Details -->
+                    @if (response.detailedFeedback || response.strengths?.length || response.improvements?.length) {
+                      <div class="grid grid-cols-12 gap-4">
+                        @if (response.detailedFeedback) {
+                          <div class="col-span-12">
+                            <div class="font-medium text-surface-900 dark:text-surface-0 mb-3">
+                              <i class="pi pi-comment mr-2"></i>AI Feedback
+                            </div>
+                            <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border-l-4 border-blue-500">
+                              <div class="prose prose-sm max-w-none">
+                                <div class="whitespace-pre-wrap text-surface-900 dark:text-surface-0 leading-relaxed">{{ response.detailedFeedback }}</div>
+                              </div>
+                            </div>
+                          </div>
+                        }
+
+                        @if (response.strengths?.length) {
+                          <div class="col-span-12 md:col-span-6">
+                            <div class="font-medium text-green-600 dark:text-green-400 mb-3">
+                              <i class="pi pi-thumbs-up mr-2"></i>What You Did Well
+                            </div>
+                            <div class="space-y-2">
+                              @for (strength of response.strengths; track strength) {
+                                <div class="flex items-start p-3 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border-l-4 border-green-500">
+                                  <i class="pi pi-check-circle text-green-600 dark:text-green-400 mr-3 mt-0.5 flex-shrink-0"></i>
+                                  <span class="text-sm text-surface-900 dark:text-surface-0 leading-relaxed">{{ strength }}</span>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
+
+                        @if (response.improvements?.length) {
+                          <div class="col-span-12 md:col-span-6">
+                            <div class="font-medium text-orange-600 dark:text-orange-400 mb-3">
+                              <i class="pi pi-lightbulb mr-2"></i>Areas to Improve
+                            </div>
+                            <div class="space-y-2">
+                              @for (improvement of response.improvements; track improvement) {
+                                <div class="flex items-start p-3 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-lg border-l-4 border-orange-500">
+                                  <i class="pi pi-arrow-up text-orange-600 dark:text-orange-400 mr-3 mt-0.5 flex-shrink-0"></i>
+                                  <span class="text-sm text-surface-900 dark:text-surface-0 leading-relaxed">{{ improvement }}</span>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    }
+
+                    <!-- Score Breakdown -->
+                    @if (hasScoreBreakdown(response)) {
+                      <div class="mt-6">
+                        <div class="font-medium text-surface-900 dark:text-surface-0 mb-4">
+                          <i class="pi pi-chart-bar mr-2"></i>Score Breakdown
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                          @if (response.technicalAccuracy !== null && response.technicalAccuracy !== undefined) {
+                            <div class="text-center p-4 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                              <div class="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">{{ response.technicalAccuracy }}</div>
+                              <div class="text-sm font-medium text-surface-900 dark:text-surface-0">Technical Accuracy</div>
+                              <div class="w-full bg-surface-200 dark:bg-surface-700 rounded-full h-2 mt-2">
+                                <div class="bg-blue-500 h-2 rounded-full transition-all duration-300" [style.width.%]="response.technicalAccuracy * 10"></div>
+                              </div>
+                            </div>
+                          }
+                          @if (response.clarity !== null && response.clarity !== undefined) {
+                            <div class="text-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                              <div class="text-3xl font-bold text-green-600 dark:text-green-400 mb-1">{{ response.clarity }}</div>
+                              <div class="text-sm font-medium text-surface-900 dark:text-surface-0">Clarity</div>
+                              <div class="w-full bg-surface-200 dark:bg-surface-700 rounded-full h-2 mt-2">
+                                <div class="bg-green-500 h-2 rounded-full transition-all duration-300" [style.width.%]="response.clarity * 10"></div>
+                              </div>
+                            </div>
+                          }
+                          @if (response.completeness !== null && response.completeness !== undefined) {
+                            <div class="text-center p-4 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                              <div class="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">{{ response.completeness }}</div>
+                              <div class="text-sm font-medium text-surface-900 dark:text-surface-0">Completeness</div>
+                              <div class="w-full bg-surface-200 dark:bg-surface-700 rounded-full h-2 mt-2">
+                                <div class="bg-purple-500 h-2 rounded-full transition-all duration-300" [style.width.%]="response.completeness * 10"></div>
+                              </div>
+                            </div>
+                          }
+                          @if (response.problemSolving !== null && response.problemSolving !== undefined) {
+                            <div class="text-center p-4 bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                              <div class="text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1">{{ response.problemSolving }}</div>
+                              <div class="text-sm font-medium text-surface-900 dark:text-surface-0">Problem Solving</div>
+                              <div class="w-full bg-surface-200 dark:bg-surface-700 rounded-full h-2 mt-2">
+                                <div class="bg-orange-500 h-2 rounded-full transition-all duration-300" [style.width.%]="response.problemSolving * 10"></div>
+                              </div>
+                            </div>
+                          }
+                          @if (response.communication !== null && response.communication !== undefined) {
+                            <div class="text-center p-4 bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                              <div class="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-1">{{ response.communication }}</div>
+                              <div class="text-sm font-medium text-surface-900 dark:text-surface-0">Communication</div>
+                              <div class="w-full bg-surface-200 dark:bg-surface-700 rounded-full h-2 mt-2">
+                                <div class="bg-indigo-500 h-2 rounded-full transition-all duration-300" [style.width.%]="response.communication * 10"></div>
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                  </p-accordion-content>
+                </p-accordion-panel>
+              }
+            </p-accordion>
+          } @else {
+            <div class="text-center text-muted-color p-8">
+              <i class="pi pi-info-circle text-4xl mb-4 block"></i>
+              <div>No questions answered in this session</div>
+            </div>
+          }
+        </p-tabpanel>
+
+        <!-- Recommendations Tab -->
+        <p-tabpanel value="2">
+          <div class="grid grid-cols-12 gap-6">
+            <div class="col-span-12 lg:col-span-8">
+              <div class="card mb-0">
+                <h3 class="text-surface-900 dark:text-surface-0 font-medium mb-4">Personalized Learning Path</h3>
+                
+                @if (recommendations().length > 0) {
+                  <div class="space-y-4">
+                    @for (rec of recommendations(); track rec; let i = $index) {
+                      <div class="flex items-start p-4 bg-blue-50 dark:bg-blue-900/10 rounded-lg border-l-4 border-blue-500">
+                        <div class="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold mr-4 flex-shrink-0">
+                          {{ i + 1 }}
+                        </div>
+                        <div>
+                          <div class="font-medium text-surface-900 dark:text-surface-0">{{ rec }}</div>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div class="text-center text-muted-color p-8">
+                    <i class="pi pi-info-circle text-4xl mb-4 block"></i>
+                    <div>No specific recommendations available</div>
+                    <div class="text-sm mt-2">Keep practicing to get personalized feedback!</div>
+                  </div>
+                }
+              </div>
+            </div>
+
+            <div class="col-span-12 lg:col-span-4">
+              <div class="card mb-0">
+                <h3 class="text-surface-900 dark:text-surface-0 font-medium mb-4">Next Steps</h3>
+                <div class="space-y-3">
+                  <div class="flex items-center p-3 bg-surface-100 dark:bg-surface-800 rounded">
+                    <i class="pi pi-refresh text-blue-500 mr-3"></i>
+                    <div>
+                      <div class="font-medium">Practice More</div>
+                      <div class="text-sm text-muted-color">Take another interview in {{ sessionData.technology }}</div>
+                    </div>
+                  </div>
+                  
+                  <div class="flex items-center p-3 bg-surface-100 dark:bg-surface-800 rounded">
+                    <i class="pi pi-book text-green-500 mr-3"></i>
+                    <div>
+                      <div class="font-medium">Study Gaps</div>
+                      <div class="text-sm text-muted-color">Review areas where you scored below 70%</div>
+                    </div>
+                  </div>
+                  
+                  <div class="flex items-center p-3 bg-surface-100 dark:bg-surface-800 rounded">
+                    <i class="pi pi-users text-purple-500 mr-3"></i>
+                    <div>
+                      <div class="font-medium">Mock Interviews</div>
+                      <div class="text-sm text-muted-color">Practice with friends or mentors</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </p-tabpanel>
+        </p-tabpanels>
+      </p-tabs>
+    </div>
+    }
+  }
+</div>

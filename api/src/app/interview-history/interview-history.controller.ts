@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { InterviewHistoryService, CreateSessionDto, CreateResponseDto, EvaluationData } from './interview-history.service';
 
@@ -26,7 +26,7 @@ export class InterviewHistoryController {
     return session;
   }
 
-  @Put('sessions/:id/progress')
+  @Patch('sessions/:id/progress')
   @ApiOperation({ summary: 'Update session progress' })
   @ApiResponse({ status: 200, description: 'Session progress updated' })
   async updateSessionProgress(
@@ -37,7 +37,7 @@ export class InterviewHistoryController {
     return { success: true };
   }
 
-  @Put('sessions/:id/complete')
+  @Patch('sessions/:id/complete')
   @ApiOperation({ summary: 'Complete a session' })
   @ApiResponse({ status: 200, description: 'Session completed' })
   async completeSession(
@@ -60,7 +60,7 @@ export class InterviewHistoryController {
     return await this.interviewHistoryService.createResponse(createResponseDto);
   }
 
-  @Put('responses/:id/evaluation')
+  @Patch('responses/:id/evaluation')
   @ApiOperation({ summary: 'Update response with evaluation' })
   @ApiResponse({ status: 200, description: 'Response evaluation updated' })
   async updateResponseEvaluation(
@@ -75,8 +75,8 @@ export class InterviewHistoryController {
   @ApiOperation({ summary: 'Get session history' })
   @ApiResponse({ status: 200, description: 'Session history retrieved successfully' })
   async getSessionHistory(
-    @Query('limit') limit: string = '20',
-    @Query('offset') offset: string = '0'
+    @Query('limit') limit = '20',
+    @Query('offset') offset = '0'
   ) {
     return await this.interviewHistoryService.getSessionHistory(
       parseInt(limit),

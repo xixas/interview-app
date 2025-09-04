@@ -63,6 +63,22 @@ export class EvaluateAnswerDto {
   @IsUrl()
   @IsOptional()
   audioUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'Reference answer from the database for comparison',
+    example: 'React hooks are functions that let you hook into React state and lifecycle features from function components. They were introduced in React 16.8 as an alternative to class components...',
+  })
+  @IsString()
+  @IsOptional()
+  referenceAnswer?: string;
+
+  @ApiPropertyOptional({
+    description: 'Example answer or code snippet from the database',
+    example: 'const [count, setCount] = useState(0); useEffect(() => { document.title = `Count: ${count}`; });',
+  })
+  @IsString()
+  @IsOptional()
+  example?: string;
 }
 
 export class EvaluateAudioDto {
@@ -108,4 +124,20 @@ export class EvaluateAudioDto {
   @IsString()
   @IsOptional()
   context?: string;
+
+  @ApiPropertyOptional({
+    description: 'Reference answer from the database for comparison',
+    example: 'React hooks are functions that let you hook into React state and lifecycle features from function components. They were introduced in React 16.8 as an alternative to class components...',
+  })
+  @IsString()
+  @IsOptional()
+  referenceAnswer?: string;
+
+  @ApiPropertyOptional({
+    description: 'Example answer or code snippet from the database',
+    example: 'const [count, setCount] = useState(0); useEffect(() => { document.title = `Count: ${count}`; });',
+  })
+  @IsString()
+  @IsOptional()
+  example?: string;
 }

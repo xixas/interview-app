@@ -257,7 +257,7 @@ export class DesktopLayoutService {
     }
 
     // API Usage Methods
-    addTokenUsage(tokens: number, cost: number = 0) {
+    addTokenUsage(tokens: number, cost = 0) {
         this._apiUsage.update(current => {
             const now = new Date();
             const sessionMinutes = (now.getTime() - current.sessionStartTime.getTime()) / (1000 * 60);

@@ -27,6 +27,16 @@ export const appRoutes: Route[] = [
     title: 'Progress Analytics - Interview App'
   },
   {
+    path: 'interview-history',
+    loadComponent: () => import('./features/interview-history/interview-history.component').then(m => m.InterviewHistoryComponent),
+    title: 'Interview History - Interview App'
+  },
+  {
+    path: 'interview-history/:sessionId',
+    loadComponent: () => import('./features/interview-results/interview-results.component').then(m => m.InterviewResultsComponent),
+    title: 'Interview Results - Interview App'
+  },
+  {
     path: 'spaced-repetition',
     loadComponent: () => import('./features/spaced-repetition/spaced-repetition.component').then(m => m.SpacedRepetitionComponent),
     title: 'Spaced Repetition - Interview App'

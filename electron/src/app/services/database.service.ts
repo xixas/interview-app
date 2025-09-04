@@ -7,6 +7,7 @@ import { existsSync } from 'fs';
 export interface Question {
   id: number;
   question: string;
+  answer: string; // Reference answer from database
   difficulty: 'Fundamental' | 'Advanced' | 'Extensive';
   category: string;
   example?: string;
@@ -129,6 +130,7 @@ async getRandomQuestions(filters: { count?: number; technology?: string; difficu
     return rows.map((r: any) => ({
       id: r.id,
       question: r.question,
+      answer: r.answer || '', // Include reference answer
       difficulty: (r.difficulty as 'Fundamental'|'Advanced'|'Extensive') ?? 'Advanced',
       category: r.category ?? 'General',
       example: r.example || undefined,
@@ -157,6 +159,7 @@ async getRandomQuestions(filters: { count?: number; technology?: string; difficu
       return questions.map((q: any) => ({
         id: q.id,
         question: q.question,
+        answer: q.answer || '', // Include reference answer
         difficulty: q.difficulty || 'Advanced',
         category: q.category || technology,
         example: q.example || undefined,

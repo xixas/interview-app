@@ -1,27 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { NotificationService } from './notification.service';
-
-// Global type declarations for electron API
-declare global {
-  interface Window {
-    electronAPI?: {
-      database: {
-        initialize: () => Promise<{ success: boolean; error?: string; message?: string }>;
-        getTechnologies: () => Promise<{ success: boolean; data?: Array<{ name: string; totalQuestions: number }>; error?: string }>;
-        getRandomQuestions: (filters: any) => Promise<{ success: boolean; data?: any[]; error?: string }>;
-        getQuestionsByTechnology: (technology: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
-      };
-      evaluator: {
-        transcribeAudio: (audioData: string) => Promise<{ success: boolean; data?: any; error?: string }>;
-        evaluateAnswer: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>;
-        evaluateAudioAnswer: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>;
-        batchEvaluate: (evaluations: any[]) => Promise<{ success: boolean; data?: any[]; error?: string }>;
-        generateSummary: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>;
-        validateKey: () => Promise<{ success: boolean; valid?: boolean; message?: string; keyPreview?: string; error?: string }>;
-      };
-    };
-  }
-}
+import '../types/electron.types';
 
 export interface TechnologyStats {
   name: string;
@@ -31,6 +10,7 @@ export interface TechnologyStats {
 export interface Question {
   id: number;
   question: string;
+  answer: string; // Reference answer from database
   difficulty: 'Fundamental' | 'Advanced' | 'Extensive';
   category: string;
   example?: string;

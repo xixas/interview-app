@@ -47,7 +47,10 @@ export class EvaluatorService {
       // Create OpenAI client with provided API key
       const trimmedApiKey = apiKey.trim();
       this.logger.log(`Using API key starting with: ${trimmedApiKey.substring(0, 7)}...`);
-      const openai = new OpenAI({ apiKey: trimmedApiKey });
+      const openai = new OpenAI({ 
+        apiKey: trimmedApiKey,
+        timeout: 60000 // 60 seconds timeout for OpenAI requests
+      });
       
       const applicableCriteria = this.getApplicableCriteria(dto.questionType, dto.question);
       this.logger.log(`Applicable criteria for question "${dto.question}": ${applicableCriteria.join(', ')}`);
@@ -96,6 +99,11 @@ export class EvaluatorService {
         throw new Error('OpenAI API access denied. Please check your account permissions and billing status.');
       } else if (error?.message?.includes('insufficient_quota')) {
         throw new Error('OpenAI API quota exceeded. Please check your account billing and usage limits.');
+      } else if (error?.message?.includes('Request failed with status code 400')) {
+        throw new Error('Invalid request data. Please check the question and answer format.');
+      } else if (error?.message?.includes('Request failed with status code 500')) {
+        this.logger.error('Detailed 500 error:', JSON.stringify(error, null, 2));
+        throw new Error('Internal server error occurred during evaluation. Please try again or check your API key.');
       } else {
         this.logger.error('Detailed error:', JSON.stringify(error, null, 2));
         throw new Error(`AI evaluation failed: ${error.message || 'Unknown error'}. Please check your API key and try again.`);
@@ -185,13 +193,39 @@ export class EvaluatorService {
       return acc;
     }, {});
 
+    // Build reference answer section if available
+    let referenceSection = '';
+    if (dto.referenceAnswer) {
+      referenceSection = `
+REFERENCE ANSWER (from database - use as a guide but note it may not be complete or perfect):
+${dto.referenceAnswer}
+`;
+      
+      if (dto.example) {
+        referenceSection += `
+EXAMPLE CODE/SNIPPET:
+${dto.example}
+`;
+      }
+      
+      referenceSection += `
+COMPARISON INSTRUCTIONS:
+- Compare the candidate's answer with the reference answer
+- Identify key concepts covered vs missed
+- Recognize when the candidate provides better or alternative valid approaches
+- Note that the reference answer may have limitations or be outdated
+- Credit the candidate for additional insights beyond the reference
+- Focus on the depth of understanding, not just matching the reference
+`;
+    }
+
     return `
 Evaluate this interview answer for a ${dto.proficiencyLevel} ${dto.role} developer position.
 
 QUESTION: ${dto.question}
 
-ANSWER: ${dto.answer}
-
+CANDIDATE'S ANSWER: ${dto.answer}
+${referenceSection}
 CONTEXT: ${dto.context || 'Standard interview setting'}
 
 QUESTION TYPE: ${dto.questionType || 'technical'}
@@ -205,7 +239,7 @@ ${roleSpecificCriteria}
 IMPORTANT: This is a ${dto.questionType || 'technical'} question. Please evaluate based ONLY on these relevant criteria (score 1-10 for each):
 ${relevantCriteriaList}
 
-Note: Some criteria may not apply to this question type. Focus only on the listed criteria above.
+${dto.referenceAnswer ? 'Note: Use the reference answer to identify what key points should be covered, but give credit for alternative valid approaches and additional insights.' : 'Note: Some criteria may not apply to this question type. Focus only on the listed criteria above.'}
 
 Provide your response in this JSON format:
 {
@@ -216,14 +250,17 @@ Provide your response in this JSON format:
     "completeness": "Score explanation for completeness...",
     "communication": "Score explanation for communication..."
   },
-  "strengths": ["Clear explanation of key concepts", "Good examples provided"],
-  "improvements": ["Could mention edge cases", "Missing security considerations"],
-  "detailedFeedback": "Detailed analysis of the answer...",
+  "strengths": ["Clear explanation of key concepts", "Good examples provided"${dto.referenceAnswer ? ', "Covered key points from reference", "Provided additional valuable insights"' : ''}],
+  "improvements": ["Could mention edge cases", "Missing security considerations"${dto.referenceAnswer ? ', "Missing key concept from reference: [specific concept]", "Could expand on [reference topic]"' : ''}],
+  "detailedFeedback": "Detailed analysis of the answer${dto.referenceAnswer ? ', including comparison with reference answer and identification of gaps or additional insights' : ''}...",
   "recommendation": "PASS",
   "nextSteps": ["Practice system design questions", "Review performance optimization"]
 }
 
-IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is below 8, clearly explain what was missing or could be improved.
+IMPORTANT: 
+- In criteriaFeedback, explain WHY each score was given. If a score is below 8, clearly explain what was missing or could be improved.
+${dto.referenceAnswer ? '- In your evaluation, clearly identify what key concepts from the reference answer were covered, missed, or improved upon by the candidate.' : ''}
+- Be fair and recognize valid alternative approaches that may differ from the reference answer.
 `;
   }
 
@@ -347,7 +384,10 @@ IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is 
     // Create OpenAI client with provided API key
     const trimmedApiKey = apiKey.trim();
     this.logger.log(`Creating OpenAI client for transcription with key starting with: ${trimmedApiKey.substring(0, 7)}...`);
-    const openai = new OpenAI({ apiKey: trimmedApiKey });
+    const openai = new OpenAI({ 
+      apiKey: trimmedApiKey,
+      timeout: 60000 // 60 seconds timeout for OpenAI requests
+    });
 
     try {
       this.logger.log(`Received audio file: ${audioFile.originalname}, mime: ${audioFile.mimetype}, size: ${audioFile.size}`);
@@ -357,12 +397,35 @@ IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is 
         throw new BadRequestException('Audio file buffer is empty. Please ensure the file is properly uploaded.');
       }
 
+      // Debug: Check WebM magic bytes (first 4 bytes should be 0x1A, 0x45, 0xDF, 0xA3)
+      const magicBytes = audioFile.buffer.slice(0, 4);
+      this.logger.log(`Audio magic bytes: ${Array.from(magicBytes).map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}`);
+      
+      // Check if this is a valid WebM file
+      const webmMagic = [0x1A, 0x45, 0xDF, 0xA3];
+      const isValidWebM = webmMagic.every((byte, index) => magicBytes[index] === byte);
+      this.logger.log(`Is valid WebM format: ${isValidWebM}`);
+
       // Create a temporary file for the audio
       const tempDir = os.tmpdir();
-      const tempFilePath = path.join(tempDir, `audio_${Date.now()}_${audioFile.originalname}`);
+      let tempFilePath: string;
+      let actualFormat: string;
+      
+      if (isValidWebM) {
+        tempFilePath = path.join(tempDir, `audio_${Date.now()}.webm`);
+        actualFormat = 'webm';
+        this.logger.log('Using original WebM format');
+      } else {
+        // If not valid WebM, try to save as generic audio file and let OpenAI detect format
+        tempFilePath = path.join(tempDir, `audio_${Date.now()}.audio`);
+        actualFormat = 'unknown';
+        this.logger.log('Invalid WebM format detected, saving as generic audio file');
+      }
       
       // Write the buffer to a temporary file
       fs.writeFileSync(tempFilePath, new Uint8Array(audioFile.buffer));
+      
+      this.logger.log(`Temp file created: ${tempFilePath}, size: ${fs.statSync(tempFilePath).size} bytes`);
 
       // Transcribe using OpenAI Whisper
       const transcription = await openai.audio.transcriptions.create({
@@ -456,7 +519,10 @@ IMPORTANT: In criteriaFeedback, explain WHY each score was given. If a score is 
 
     // Create OpenAI client with provided API key
     const trimmedApiKey = apiKey.trim();
-    const openai = new OpenAI({ apiKey: trimmedApiKey });
+    const openai = new OpenAI({ 
+      apiKey: trimmedApiKey,
+      timeout: 60000 // 60 seconds timeout for OpenAI requests
+    });
 
     try {
       const audioAnalysisPrompt = this.buildAudioAnalysisPrompt(transcription, evaluateAudioDto);
@@ -693,7 +759,9 @@ IMPORTANT: Be strict in detecting reading behavior. Look for these red flags:
       role: evaluateAudioDto.role,
       proficiencyLevel: evaluateAudioDto.proficiencyLevel,
       questionType: evaluateAudioDto.questionType,
-      context: evaluateAudioDto.context
+      context: evaluateAudioDto.context,
+      referenceAnswer: evaluateAudioDto.referenceAnswer,
+      example: evaluateAudioDto.example
     };
 
     const baseEvaluation = await this.evaluateAnswer(textEvaluateDto, apiKey);

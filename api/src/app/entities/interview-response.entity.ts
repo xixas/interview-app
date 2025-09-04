@@ -14,15 +14,24 @@ export class InterviewResponse {
   @Column('text', { name: 'session_id' })
   sessionId!: string;
 
-  @ManyToOne(() => Question)
-  @JoinColumn({ name: 'question_id' })
-  question!: Question;
-
   @Column('integer', { name: 'question_id' })
   questionId!: number;
 
   @Column('integer', { name: 'question_order' })
   questionOrder!: number;
+
+  // Store actual question data at time of interview to preserve historical accuracy
+  @Column('text', { name: 'question_text' })
+  questionText!: string;
+
+  @Column('text', { name: 'question_answer', nullable: true })
+  questionAnswer?: string;
+
+  @Column('text', { name: 'question_example', nullable: true })
+  questionExample?: string;
+
+  @Column('text', { name: 'question_difficulty', nullable: true })
+  questionDifficulty?: string;
 
   @Column('text')
   answer!: string;
@@ -80,6 +89,16 @@ export class InterviewResponse {
 
   @Column('text', { name: 'criteria_feedback', nullable: true })
   criteriaFeedback?: string; // JSON object
+
+  // Audio transcription data
+  @Column('text', { name: 'transcription_text', nullable: true })
+  transcriptionText?: string;
+
+  @Column('real', { name: 'transcription_duration', nullable: true })
+  transcriptionDuration?: number;
+
+  @Column('text', { name: 'transcription_language', nullable: true })
+  transcriptionLanguage?: string;
 
   @CreateDateColumn({ name: 'answered_at' })
   answeredAt!: Date;

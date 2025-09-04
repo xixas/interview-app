@@ -8,17 +8,8 @@ import { PageHeaderComponent } from '../../shared/components/page-header.compone
   standalone: true,
   imports: [CommonModule, WorkInProgressComponent, PageHeaderComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="page-container">
-      <app-page-header 
-        title="Spaced Repetition Learning"
-        description="Optimize your learning with scientifically-proven spaced repetition algorithms"
-        icon="pi pi-refresh">
-      </app-page-header>
-      <app-work-in-progress [config]="spacedRepetitionConfig()" />
-    </div>
-  `,
-  styles: []
+  templateUrl: './spaced-repetition.component.html',
+  styleUrl: './spaced-repetition.component.scss'
 })
 export class SpacedRepetitionComponent {
   spacedRepetitionConfig = signal<WorkInProgressConfig>({

@@ -136,7 +136,7 @@ export class NotificationService {
     this.showSuccess('Deleted', 'Item has been removed successfully');
   }
 
-  showValidationError(message: string = 'Please check the form for errors'): void {
+  showValidationError(message = 'Please check the form for errors'): void {
     this.showWarn('Validation Error', message);
   }
 

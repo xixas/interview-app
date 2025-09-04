@@ -18,14 +18,47 @@ import { InterviewResponse } from './entities/interview-response.entity';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    // Questions Database (Read-only)
     TypeOrmModule.forRootAsync({
+      name: 'questionsConnection',
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         type: 'sqlite',
-        database: getDatabasePath(),
-        entities: [Tech, Question, InterviewSession, InterviewResponse],
-        synchronize: false, // Don't sync, use existing database
+        database: getQuestionsDbPath(),
+        entities: [Tech, Question],
+        synchronize: false,
         logging: process.env.NODE_ENV === 'development',
+        extra: {
+          journal_mode: 'WAL',
+          foreign_keys: 'ON',
+          busy_timeout: 30000,
+        },
+        pool: {
+          max: 1,
+        },
+      }),
+      inject: [ConfigService],
+    }),
+    // User History Database (Read-Write)
+    TypeOrmModule.forRootAsync({
+      name: 'historyConnection',
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        type: 'sqlite',
+        database: getUserHistoryDbPath(),
+        entities: [InterviewSession, InterviewResponse],
+        migrations: [join(__dirname, '..', 'migrations', '*.js')],
+        synchronize: false,
+        migrationsRun: false, // We created tables manually
+        logging: process.env.NODE_ENV === 'development',
+        extra: {
+          journal_mode: 'WAL',
+          foreign_keys: 'ON',
+          busy_timeout: 30000,
+        },
+        pool: {
+          max: 1,
+        },
       }),
       inject: [ConfigService],
     }),
@@ -37,13 +70,18 @@ import { InterviewResponse } from './entities/interview-response.entity';
 })
 export class AppModule {}
 
-function getDatabasePath(): string {
-  console.log(join(__dirname, 'assets', 'mock-interview-backup-2025-08-08.db'))
-  // In production, look for database in the app's assets directory
-  if (process.env.NODE_ENV === 'production') {
-    return join(__dirname, '..', 'assets', 'mock-interview-backup-2025-08-08.db');
-  }
-  
-  // In development, use the database from the current assets folder
-  return join(__dirname, 'assets', 'mock-interview-backup-2025-08-08.db');
+function getQuestionsDbPath(): string {
+  // From dist/api, go up two levels to get to project root
+  const rootPath = join(__dirname, '..', '..');
+  const dbPath = join(rootPath, 'data', 'questions.db');
+  console.log('Questions DB path:', dbPath);
+  return dbPath;
+}
+
+function getUserHistoryDbPath(): string {
+  // From dist/api, go up two levels to get to project root
+  const rootPath = join(__dirname, '..', '..');
+  const dbPath = join(rootPath, 'data', 'user-history.db');
+  console.log('User History DB path:', dbPath);
+  return dbPath;
 }

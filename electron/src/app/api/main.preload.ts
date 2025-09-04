@@ -19,6 +19,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
     generateSummary: (data: any) => ipcRenderer.invoke('evaluator-generate-summary', data),
     validateKey: () => ipcRenderer.invoke('evaluator-validate-key'),
   },
+
+  // Interview Session operations
+  interviewSession: {
+    createSession: (data: any) => ipcRenderer.invoke('interview-session-create', data),
+    getSession: (sessionId: string) => ipcRenderer.invoke('interview-session-get', sessionId),
+    updateSessionProgress: (sessionId: string, completedQuestions: number) => 
+      ipcRenderer.invoke('interview-session-update-progress', sessionId, completedQuestions),
+    completeSession: (sessionId: string, data: any) => 
+      ipcRenderer.invoke('interview-session-complete', sessionId, data),
+    createResponse: (data: any) => ipcRenderer.invoke('interview-session-create-response', data),
+    updateResponseEvaluation: (responseId: string, evaluation: any) => 
+      ipcRenderer.invoke('interview-session-update-evaluation', responseId, evaluation),
+    getSessionHistory: (limit?: number, offset?: number) => 
+      ipcRenderer.invoke('interview-session-get-history', limit, offset),
+    getSessionDetails: (sessionId: string) => 
+      ipcRenderer.invoke('interview-session-get-details', sessionId),
+    deleteSession: (sessionId: string) => ipcRenderer.invoke('interview-session-delete', sessionId),
+    getStatistics: () => ipcRenderer.invoke('interview-session-get-statistics'),
+    exportUserData: () => ipcRenderer.invoke('interview-session-export'),
+    importUserData: (data: any) => ipcRenderer.invoke('interview-session-import', data),
+    clearAllData: () => ipcRenderer.invoke('interview-session-clear-all'),
+  },
 });
 
 contextBridge.exposeInMainWorld('electron', {
@@ -85,6 +107,28 @@ contextBridge.exposeInMainWorld('electron', {
     batchEvaluate: (evaluations: any[]) => ipcRenderer.invoke('evaluator-batch-evaluate', evaluations),
     generateSummary: (data: any) => ipcRenderer.invoke('evaluator-generate-summary', data),
     validateKey: () => ipcRenderer.invoke('evaluator-validate-key'),
+  },
+
+  // Interview Session operations
+  interviewSession: {
+    createSession: (data: any) => ipcRenderer.invoke('interview-session-create', data),
+    getSession: (sessionId: string) => ipcRenderer.invoke('interview-session-get', sessionId),
+    updateSessionProgress: (sessionId: string, completedQuestions: number) => 
+      ipcRenderer.invoke('interview-session-update-progress', sessionId, completedQuestions),
+    completeSession: (sessionId: string, data: any) => 
+      ipcRenderer.invoke('interview-session-complete', sessionId, data),
+    createResponse: (data: any) => ipcRenderer.invoke('interview-session-create-response', data),
+    updateResponseEvaluation: (responseId: string, evaluation: any) => 
+      ipcRenderer.invoke('interview-session-update-evaluation', responseId, evaluation),
+    getSessionHistory: (limit?: number, offset?: number) => 
+      ipcRenderer.invoke('interview-session-get-history', limit, offset),
+    getSessionDetails: (sessionId: string) => 
+      ipcRenderer.invoke('interview-session-get-details', sessionId),
+    deleteSession: (sessionId: string) => ipcRenderer.invoke('interview-session-delete', sessionId),
+    getStatistics: () => ipcRenderer.invoke('interview-session-get-statistics'),
+    exportUserData: () => ipcRenderer.invoke('interview-session-export'),
+    importUserData: (data: any) => ipcRenderer.invoke('interview-session-import', data),
+    clearAllData: () => ipcRenderer.invoke('interview-session-clear-all'),
   },
 
   // Auto-updater

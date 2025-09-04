@@ -8,17 +8,8 @@ import { PageHeaderComponent } from '../../shared/components/page-header.compone
   standalone: true,
   imports: [CommonModule, WorkInProgressComponent, PageHeaderComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="page-container">
-      <app-page-header 
-        title="Progress Analytics"
-        description="Track your interview practice progress with detailed analytics and insights"
-        icon="pi pi-chart-line">
-      </app-page-header>
-      <app-work-in-progress [config]="progressConfig()" />
-    </div>
-  `,
-  styles: []
+  templateUrl: './progress.component.html',
+  styleUrl: './progress.component.scss'
 })
 export class ProgressComponent {
   progressConfig = signal<WorkInProgressConfig>({

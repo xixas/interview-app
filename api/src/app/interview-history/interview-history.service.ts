@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InterviewSession } from '../entities/interview-session.entity';
 import { InterviewResponse } from '../entities/interview-response.entity';
+import { Question } from '../entities/question.entity';
 
 export interface CreateSessionDto {
   technology: string;
@@ -14,6 +15,10 @@ export interface CreateResponseDto {
   sessionId: string;
   questionId: number;
   questionOrder: number;
+  questionText: string;
+  questionAnswer?: string;
+  questionExample?: string;
+  questionDifficulty?: string;
   answer: string;
   audioUrl?: string;
   timeSpentSeconds?: number;
@@ -35,6 +40,11 @@ export interface EvaluationData {
   improvements: string[];
   nextSteps: string[];
   criteriaFeedback?: Record<string, string>;
+  transcription?: {
+    text: string;
+    duration?: number;
+    language?: string;
+  };
 }
 
 export interface SessionSummary {
@@ -60,10 +70,12 @@ export interface ExportData {
 @Injectable()
 export class InterviewHistoryService {
   constructor(
-    @InjectRepository(InterviewSession)
+    @InjectRepository(InterviewSession, 'historyConnection')
     private sessionRepository: Repository<InterviewSession>,
-    @InjectRepository(InterviewResponse)
+    @InjectRepository(InterviewResponse, 'historyConnection')
     private responseRepository: Repository<InterviewResponse>,
+    @InjectRepository(Question, 'questionsConnection')
+    private questionRepository: Repository<Question>,
   ) {}
 
   async createSession(dto: CreateSessionDto): Promise<InterviewSession> {
@@ -81,7 +93,7 @@ export class InterviewHistoryService {
   async getSession(sessionId: string): Promise<InterviewSession | null> {
     return await this.sessionRepository.findOne({
       where: { id: sessionId },
-      relations: ['responses', 'responses.question'],
+      relations: ['responses'],
     });
   }
 
@@ -100,13 +112,16 @@ export class InterviewHistoryService {
     maxScore: number,
     durationSeconds: number
   ): Promise<void> {
-    const percentage = Math.round((totalScore / maxScore) * 100);
+    // Prevent division by zero and NaN errors
+    const safeMaxScore = maxScore || 1;
+    const safeTotalScore = totalScore || 0;
+    const percentage = Math.round((safeTotalScore / safeMaxScore) * 100);
     
     await this.sessionRepository.update(sessionId, {
       status: 'completed',
-      totalScore,
-      maxScore,
-      percentage,
+      totalScore: safeTotalScore,
+      maxScore: safeMaxScore,
+      percentage: isNaN(percentage) ? 0 : percentage,
       durationSeconds,
       completedAt: new Date(),
     });
@@ -117,6 +132,10 @@ export class InterviewHistoryService {
       sessionId: dto.sessionId,
       questionId: dto.questionId,
       questionOrder: dto.questionOrder,
+      questionText: dto.questionText,
+      questionAnswer: dto.questionAnswer,
+      questionExample: dto.questionExample,
+      questionDifficulty: dto.questionDifficulty,
       answer: dto.answer,
       audioUrl: dto.audioUrl,
       timeSpentSeconds: dto.timeSpentSeconds,
@@ -145,11 +164,14 @@ export class InterviewHistoryService {
       improvements: JSON.stringify(evaluation.improvements),
       nextSteps: JSON.stringify(evaluation.nextSteps),
       criteriaFeedback: evaluation.criteriaFeedback ? JSON.stringify(evaluation.criteriaFeedback) : null,
+      transcriptionText: evaluation.transcription?.text,
+      transcriptionDuration: evaluation.transcription?.duration,
+      transcriptionLanguage: evaluation.transcription?.language,
       evaluatedAt: new Date(),
     });
   }
 
-  async getSessionHistory(limit: number = 20, offset: number = 0): Promise<SessionSummary[]> {
+  async getSessionHistory(limit = 20, offset = 0): Promise<SessionSummary[]> {
     const sessions = await this.sessionRepository.find({
       order: { startedAt: 'DESC' },
       take: limit,
@@ -171,13 +193,61 @@ export class InterviewHistoryService {
   }
 
   async getSessionDetails(sessionId: string): Promise<InterviewSession | null> {
-    return await this.sessionRepository.findOne({
+    const session = await this.sessionRepository.findOne({
       where: { id: sessionId },
-      relations: ['responses', 'responses.question'],
+      relations: ['responses'],
       order: {
         responses: { questionOrder: 'ASC' }
       }
     });
+
+    if (session && session.responses) {
+      // Parse JSON strings back to arrays and create question object from stored data
+      session.responses.forEach(response => {
+        try {
+          // Parse JSON strings back to arrays for frontend consumption
+          if (response.strengths && typeof response.strengths === 'string') {
+            (response as any).strengths = JSON.parse(response.strengths);
+          }
+          if (response.improvements && typeof response.improvements === 'string') {
+            (response as any).improvements = JSON.parse(response.improvements);
+          }
+          if (response.nextSteps && typeof response.nextSteps === 'string') {
+            (response as any).nextSteps = JSON.parse(response.nextSteps);
+          }
+          if (response.criteriaFeedback && typeof response.criteriaFeedback === 'string') {
+            (response as any).criteriaFeedback = JSON.parse(response.criteriaFeedback);
+          }
+
+          // Create question object from stored historical data
+          (response as any).question = {
+            id: response.questionId,
+            question: (response as any).questionText,
+            answer: (response as any).questionAnswer,
+            example: (response as any).questionExample,
+            difficulty: (response as any).questionDifficulty
+          };
+
+          // Add transcription data if available
+          if ((response as any).transcriptionText) {
+            (response as any).transcription = {
+              text: (response as any).transcriptionText,
+              duration: (response as any).transcriptionDuration,
+              language: (response as any).transcriptionLanguage
+            };
+          }
+        } catch (error) {
+          console.error('Failed to parse JSON field for response:', response.id, error);
+          // Set defaults if parsing fails
+          if (typeof response.strengths === 'string') (response as any).strengths = [];
+          if (typeof response.improvements === 'string') (response as any).improvements = [];
+          if (typeof response.nextSteps === 'string') (response as any).nextSteps = [];
+          if (typeof response.criteriaFeedback === 'string') (response as any).criteriaFeedback = {};
+        }
+      });
+    }
+
+    return session;
   }
 
   async deleteSession(sessionId: string): Promise<void> {
@@ -253,13 +323,38 @@ export class InterviewHistoryService {
 
   async exportUserData(): Promise<ExportData> {
     const sessions = await this.sessionRepository.find({
-      relations: ['responses', 'responses.question'],
+      relations: ['responses'],
       order: { startedAt: 'DESC' }
     });
 
     const responses = await this.responseRepository.find({
-      relations: ['question', 'session'],
+      relations: ['session'],
       order: { answeredAt: 'DESC' }
+    });
+
+    // Parse JSON strings back to arrays for export
+    responses.forEach(response => {
+      try {
+        if (response.strengths && typeof response.strengths === 'string') {
+          (response as any).strengths = JSON.parse(response.strengths);
+        }
+        if (response.improvements && typeof response.improvements === 'string') {
+          (response as any).improvements = JSON.parse(response.improvements);
+        }
+        if (response.nextSteps && typeof response.nextSteps === 'string') {
+          (response as any).nextSteps = JSON.parse(response.nextSteps);
+        }
+        if (response.criteriaFeedback && typeof response.criteriaFeedback === 'string') {
+          (response as any).criteriaFeedback = JSON.parse(response.criteriaFeedback);
+        }
+      } catch (error) {
+        console.error('Failed to parse JSON field for export response:', response.id, error);
+        // Set defaults if parsing fails
+        if (typeof response.strengths === 'string') (response as any).strengths = [];
+        if (typeof response.improvements === 'string') (response as any).improvements = [];
+        if (typeof response.nextSteps === 'string') (response as any).nextSteps = [];
+        if (typeof response.criteriaFeedback === 'string') (response as any).criteriaFeedback = {};
+      }
     });
 
     return {

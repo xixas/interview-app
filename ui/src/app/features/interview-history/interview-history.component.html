@@ -1,0 +1,305 @@
+<div class="p-8">
+  <app-page-header
+    title="Interview History"
+    description="View and manage your past interview sessions"
+    icon="pi pi-history">
+    <div slot="actions" class="page-actions">
+      <p-button
+        label="Export Data"
+        icon="pi pi-download"
+        (click)="exportData()"
+        [loading]="isExporting()"
+        severity="secondary"
+        outlined
+        class="mr-2" />
+      <p-button
+        label="Start New Interview"
+        icon="pi pi-plus"
+        (click)="startNewInterview()"
+        class="mr-2" />
+    </div>
+  </app-page-header>
+
+  <!-- Statistics Cards -->
+  @if (statistics(); as stats) {
+    <div class="grid grid-cols-12 gap-8 mb-6">
+      <div class="col-span-12 lg:col-span-6 xl:col-span-3">
+        <div class="card mb-0">
+          <div class="flex justify-between mb-4">
+            <div>
+              <span class="block text-muted-color font-medium mb-4">Total Sessions</span>
+              <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ stats.totalSessions }}</div>
+            </div>
+            <div class="flex items-center justify-center bg-blue-100 dark:bg-blue-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
+              <i class="pi pi-chart-line text-blue-500 text-xl"></i>
+            </div>
+          </div>
+          <span class="text-primary font-medium">{{ stats.completedSessions }} </span>
+          <span class="text-muted-color">completed</span>
+        </div>
+      </div>
+
+      <div class="col-span-12 lg:col-span-6 xl:col-span-3">
+        <div class="card mb-0">
+          <div class="flex justify-between mb-4">
+            <div>
+              <span class="block text-muted-color font-medium mb-4">Average Score</span>
+              <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ stats.averageScore }}%</div>
+            </div>
+            <div class="flex items-center justify-center bg-green-100 dark:bg-green-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
+              <i class="pi pi-star text-green-500 text-xl"></i>
+            </div>
+          </div>
+          <span class="text-primary font-medium">{{ stats.totalQuestionsAnswered }} </span>
+          <span class="text-muted-color">questions answered</span>
+        </div>
+      </div>
+
+      <div class="col-span-12 lg:col-span-6 xl:col-span-3">
+        <div class="card mb-0">
+          <div class="flex justify-between mb-4">
+            <div>
+              <span class="block text-muted-color font-medium mb-4">Avg Duration</span>
+              <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ formatDuration(stats.averageSessionDuration) }}</div>
+            </div>
+            <div class="flex items-center justify-center bg-orange-100 dark:bg-orange-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
+              <i class="pi pi-clock text-orange-500 text-xl"></i>
+            </div>
+          </div>
+          <span class="text-primary font-medium">{{ stats.completedSessions }} </span>
+          <span class="text-muted-color">interviews tracked</span>
+        </div>
+      </div>
+
+      <div class="col-span-12 lg:col-span-6 xl:col-span-3">
+        <div class="card mb-0">
+          <div class="flex justify-between mb-4">
+            <div>
+              <span class="block text-muted-color font-medium mb-4">Technologies</span>
+              <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ getTechnologyCount(stats.technologyBreakdown) }}</div>
+            </div>
+            <div class="flex items-center justify-center bg-purple-100 dark:bg-purple-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
+              <i class="pi pi-code text-purple-500 text-xl"></i>
+            </div>
+          </div>
+          <span class="text-primary font-medium">{{ getMostPracticedCount(stats.technologyBreakdown) }} </span>
+          <span class="text-muted-color">most practiced</span>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Sessions Table -->
+  <div class="card mb-0">
+    <p-toolbar class="mb-6">
+      <ng-template #start>
+        <p-button 
+          label="Refresh" 
+          icon="pi pi-refresh" 
+          severity="secondary" 
+          class="mr-2" 
+          (click)="loadSessions()"
+          [loading]="isLoading()" />
+        <p-button 
+          label="Clear All Data" 
+          icon="pi pi-trash" 
+          severity="secondary" 
+          outlined 
+          (click)="confirmClearAllData()" />
+      </ng-template>
+    </p-toolbar>
+
+    @if (isLoading()) {
+      <div class="flex justify-center items-center h-64">
+        <p-progressBar mode="indeterminate" class="w-64"></p-progressBar>
+      </div>
+    } @else if (errorMessage()) {
+      <p-message severity="error" [text]="errorMessage()" class="mb-4"></p-message>
+    } @else {
+      <p-table
+        #dt
+        [value]="filteredSessions()"
+        [paginator]="true"
+        [rows]="10"
+        [rowsPerPageOptions]="[10, 20, 30]"
+        [loading]="isLoading()"
+        [rowHover]="true"
+        [tableStyle]="{ 'min-width': '75rem' }"
+        currentPageReportTemplate="Showing {first} to {last} of {totalRecords} sessions"
+        [showCurrentPageReport]="true"
+        dataKey="id">
+        
+        <ng-template pTemplate="caption">
+            <div class="flex items-center justify-between">
+                <h5 class="m-0">Interview Sessions</h5>
+                <p-iconfield>
+                    <p-inputicon class="pi pi-search" />
+                    <input pInputText type="text" (input)="onGlobalFilter($event)" placeholder="Search..." />
+                </p-iconfield>
+            </div>
+        </ng-template>
+
+        <ng-template pTemplate="header">
+          <tr>
+            <th pSortableColumn="startedAt" style="min-width: 12rem">
+              <div class="flex justify-between items-center">
+                Date
+                <p-sortIcon field="startedAt"></p-sortIcon>
+              </div>
+            </th>
+            <th pSortableColumn="technology" style="min-width: 10rem">
+              <div class="flex justify-between items-center">
+                Technology
+                <p-sortIcon field="technology"></p-sortIcon>
+              </div>
+            </th>
+            <th pSortableColumn="difficulty" style="min-width: 8rem">
+              <div class="flex justify-between items-center">
+                Difficulty
+                <p-sortIcon field="difficulty"></p-sortIcon>
+              </div>
+            </th>
+            <th pSortableColumn="completedQuestions" style="min-width: 8rem">
+              <div class="flex justify-between items-center">
+                Progress
+                <p-sortIcon field="completedQuestions"></p-sortIcon>
+              </div>
+            </th>
+            <th pSortableColumn="percentage" style="min-width: 6rem">
+              <div class="flex justify-between items-center">
+                Score
+                <p-sortIcon field="percentage"></p-sortIcon>
+              </div>
+            </th>
+            <th pSortableColumn="durationSeconds" style="min-width: 6rem">
+              <div class="flex justify-between items-center">
+                Duration
+                <p-sortIcon field="durationSeconds"></p-sortIcon>
+              </div>
+            </th>
+            <th pSortableColumn="status" style="min-width: 8rem">
+              <div class="flex justify-between items-center">
+                Status
+                <p-sortIcon field="status"></p-sortIcon>
+              </div>
+            </th>
+            <th style="width: 8rem">Actions</th>
+          </tr>
+        </ng-template>
+        
+        <ng-template pTemplate="body" let-session>
+          <tr>
+            <td>
+              <div class="text-surface-900 dark:text-surface-0">
+                {{ formatDate(session.startedAt) }}
+              </div>
+              <div class="text-muted-color text-sm">
+                {{ formatTime(session.startedAt) }}
+              </div>
+            </td>
+            <td>
+              <span class="font-medium">{{ session.technology }}</span>
+            </td>
+            <td>
+              <p-tag
+                [value]="session.difficulty"
+                [severity]="getDifficultySeverity(session.difficulty)"
+                [rounded]="true">
+              </p-tag>
+            </td>
+            <td>
+              <div class="flex items-center">
+                {{ session.completedQuestions }}/{{ session.totalQuestions }}
+                <p-progressBar
+                  [value]="getCompletionPercentage(session)"
+                  [showValue]="false"
+                  class="ml-2 w-16 h-2">
+                </p-progressBar>
+              </div>
+            </td>
+            <td>
+              @if (session.percentage !== null && session.percentage !== undefined && session.percentage > 0) {
+                <div class="flex items-center">
+                  <p-tag
+                    [value]="session.percentage + '%'"
+                    [severity]="getScoreSeverity(session.percentage)"
+                    [rounded]="true">
+                  </p-tag>
+                </div>
+              } @else if (session.status === 'in_progress') {
+                <p-tag value="In Progress" severity="warning" [rounded]="true">
+                  <i class="pi pi-clock text-xs mr-1"></i>
+                </p-tag>
+              } @else if (session.status === 'completed' && session.completedQuestions > 0) {
+                <p-tag value="Evaluating" severity="info" [rounded]="true">
+                  <i class="pi pi-spin pi-spinner text-xs mr-1"></i>
+                </p-tag>
+              } @else {
+                <p-tag value="Incomplete" severity="secondary" [rounded]="true"></p-tag>
+              }
+            </td>
+            <td>
+              @if (session.durationSeconds) {
+                {{ formatDuration(session.durationSeconds) }}
+              } @else {
+                <span class="text-muted-color">-</span>
+              }
+            </td>
+            <td>
+              @if (session.status === 'completed') {
+                @if (session.percentage !== null && session.percentage !== undefined && session.percentage > 0) {
+                  <p-tag value="Evaluated" severity="success" [rounded]="true">
+                    <i class="pi pi-check text-xs mr-1"></i>
+                  </p-tag>
+                } @else if (session.completedQuestions > 0) {
+                  <p-tag value="Evaluating" severity="info" [rounded]="true">
+                    <i class="pi pi-clock text-xs mr-1"></i>
+                  </p-tag>
+                } @else {
+                  <p-tag value="Incomplete" severity="secondary" [rounded]="true"></p-tag>
+                }
+              } @else {
+                <p-tag
+                  [value]="session.status"
+                  [severity]="getStatusSeverity(session.status)"
+                  [rounded]="true">
+                </p-tag>
+              }
+            </td>
+            <td>
+              <div class="flex items-center gap-2">
+                <p-button
+                  icon="pi pi-eye"
+                  size="small"
+                  severity="secondary"
+                  (click)="viewSessionDetails(session.id)"
+                  pTooltip="View Details" />
+                <p-button
+                  icon="pi pi-trash"
+                  size="small"
+                  severity="danger"
+                  (click)="confirmDeleteSession(session)"
+                  pTooltip="Delete Session" />
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+        
+        <ng-template pTemplate="emptymessage">
+          <tr>
+            <td colspan="8" class="text-center p-8">
+              <div class="flex flex-col items-center justify-center text-muted-color">
+                <i class="pi pi-info-circle text-4xl mb-4"></i>
+                <div class="text-lg mb-2 font-medium">No interview sessions found</div>
+                <div class="text-sm">Start your first interview to see results here</div>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    }
+  </div>
+</div>
+
+<!-- Confirm Dialogs -->
+<p-confirmDialog></p-confirmDialog>

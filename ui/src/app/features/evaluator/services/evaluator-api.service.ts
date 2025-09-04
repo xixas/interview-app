@@ -73,7 +73,7 @@ export class EvaluatorApiService {
         
         // Create FormData to send multipart/form-data
         const formData = new FormData();
-        formData.append('audioFile', request.audioFile);
+        formData.append('audio', request.audioFile);
         formData.append('question', request.question);
         formData.append('role', request.role);
         formData.append('proficiencyLevel', request.proficiencyLevel);
