@@ -20,7 +20,7 @@ export class NetworkService {
   readonly networkStatus = this._networkStatus.asReadonly();
   
   private checkInterval: number | null = null;
-  private readonly EVALUATOR_URL = 'http://localhost:3001';
+  private readonly EVALUATOR_URL = 'http://localhost:3001/api';
   private onlineHandler: (() => void) | null = null;
   private offlineHandler: (() => void) | null = null;
 
