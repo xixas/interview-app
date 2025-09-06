@@ -1,0 +1,202 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build application
+        run: npm run build:electron
+
+      - name: Build Linux AppImage
+        run: npm run build:appimage
+
+      - name: Upload Linux build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: release/*.AppImage
+          retention-days: 30
+
+  build-windows:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build application
+        run: npm run build:electron
+
+      - name: Build Windows installer
+        run: npm run package:win
+
+      - name: Upload Windows build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            release/*.exe
+            release/*.exe.blockmap
+          retention-days: 30
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build application
+        run: npm run build:electron
+
+      - name: Build macOS DMG
+        run: npm run package:mac
+        env:
+          # Skip code signing for now - can be added later with certificates
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Upload macOS build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: release/*.dmg
+          retention-days: 30
+
+  create-release:
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release-files
+          cp artifacts/linux-build/* release-files/ || true
+          cp artifacts/windows-build/* release-files/ || true
+          cp artifacts/macos-build/* release-files/ || true
+          ls -la release-files/
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION=${{ github.event.inputs.version }}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_number=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Create a simple changelog from recent commits
+          echo "## Changes" > CHANGELOG.md
+          git log --pretty=format:"- %s" --since="1 month ago" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## Downloads" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          
+          # List available builds
+          if [ -f "release-files/*.AppImage" ]; then
+            echo "### Linux" >> CHANGELOG.md
+            echo "- AppImage format (works on most Linux distributions)" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          if [ -f "release-files/*.exe" ]; then
+            echo "### Windows" >> CHANGELOG.md
+            echo "- NSIS installer for Windows 10/11 (x64)" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          if [ -f "release-files/*.dmg" ]; then
+            echo "### macOS" >> CHANGELOG.md
+            echo "- DMG installer for macOS 10.13+ (Intel & Apple Silicon)" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          echo "## System Requirements" >> CHANGELOG.md
+          echo "- **Memory**: 4GB RAM minimum, 8GB recommended" >> CHANGELOG.md
+          echo "- **Storage**: 500MB available space" >> CHANGELOG.md
+          echo "- **OpenAI API Key**: Required for AI evaluation features" >> CHANGELOG.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Interview App ${{ steps.version.outputs.version }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: false
+          files: |
+            release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update latest release info
+        run: |
+          echo "✅ Release ${{ steps.version.outputs.version }} created successfully!"
+          echo "📦 Available downloads:"
+          ls -la release-files/

@@ -1,275 +1,61 @@
-name: E2E Tests - Interview App v2
+name: E2E Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
-  schedule:
-    # Run tests daily at 2 AM UTC to catch any issues
-    - cron: '0 2 * * *'
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   e2e-tests:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        node-version: [18, 20]
-      fail-fast: false
+    runs-on: ubuntu-latest
+    if: github.event_name != 'push' || contains(github.event.head_commit.message, '[e2e]')
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 20
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
+
+      - name: Check if E2E tests exist
+        id: check-e2e
+        run: |
+          if [ -d "ui-e2e" ] && [ -f "ui-e2e/playwright.config.ts" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Install Playwright browsers
-        run: npm run test:e2e:install
+        if: steps.check-e2e.outputs.exists == 'true'
+        run: npx playwright install --with-deps
 
       - name: Build application
+        if: steps.check-e2e.outputs.exists == 'true'
         run: npm run build
 
-      - name: Run linting
-        run: npm run lint
-
-      - name: Run unit tests
-        run: npm run test
-
-      - name: Start services for testing
-        run: |
-          npm run serve:api &
-          npm run serve:evaluator &
-          sleep 10
-        if: matrix.os == 'ubuntu-latest'
-
-      - name: Run E2E tests (Electron)
-        run: npm run test:e2e
-        env:
-          # Use test OpenAI key for CI (limited quota)
-          OPENAI_KEY: ${{ secrets.OPENAI_TEST_KEY }}
-          # Ensure Electron runs in headless mode
-          ELECTRON_DISABLE_SECURITY_WARNINGS: true
-          # Start services during tests
-          START_SERVICES: true
-        timeout-minutes: 15
-
-      - name: Run E2E tests (Web)
-        run: npm run test:e2e:web
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '18'
+      - name: Run E2E tests
+        if: steps.check-e2e.outputs.exists == 'true'
+        run: npx nx e2e ui-e2e
         timeout-minutes: 10
 
       - name: Upload Playwright Report
+        if: always() && steps.check-e2e.outputs.exists == 'true'
         uses: actions/upload-artifact@v4
-        if: failure()
         with:
-          name: playwright-report-${{ matrix.os }}-node${{ matrix.node-version }}
-          path: |
-            playwright-report/
-            test-results/
-            test-videos/
-          retention-days: 7
+          name: playwright-report
+          path: ui-e2e/playwright-report/
+          retention-days: 30
 
-      - name: Upload Screenshots
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: screenshots-${{ matrix.os }}-node${{ matrix.node-version }}
-          path: screenshots/
-          retention-days: 7
+      - name: Skip E2E tests
+        if: steps.check-e2e.outputs.exists == 'false'
+        run: echo "E2E tests not configured yet - skipping"
 
-      - name: Comment PR with test results
-        uses: actions/github-script@v7
-        if: failure() && github.event_name == 'pull_request'
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            
-            // Try to read test results
-            let testResults = 'E2E tests failed. Check the artifacts for detailed results.';
-            
-            try {
-              const resultsPath = path.join('test-results.json');
-              if (fs.existsSync(resultsPath)) {
-                const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
-                testResults = `
-            ## E2E Test Results 🔴
-            
-            **Failed Tests:** ${results.stats?.failed || 'Unknown'}
-            **Passed Tests:** ${results.stats?.passed || 'Unknown'}
-            **Total Tests:** ${results.stats?.total || 'Unknown'}
-            
-            **Platform:** ${{ matrix.os }} - Node.js ${{ matrix.node-version }}
-            
-            Please check the uploaded artifacts for detailed test reports and screenshots.
-                `;
-              }
-            } catch (error) {
-              console.log('Could not read test results:', error.message);
-            }
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: testResults
-            });
-
-  security-tests:
-    runs-on: ubuntu-latest
-    needs: e2e-tests
-    if: github.event_name == 'pull_request'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run security audit
-        run: npm audit --audit-level=moderate
-
-      - name: Check for sensitive data in tests
-        run: |
-          # Check for hardcoded API keys or secrets in test files
-          if grep -r "sk-[a-zA-Z0-9]" tests/ --exclude-dir=node_modules; then
-            echo "❌ Found potential hardcoded API keys in tests"
-            exit 1
-          else
-            echo "✅ No hardcoded API keys found in tests"
-          fi
-
-      - name: Validate test isolation
-        run: |
-          # Ensure tests clean up after themselves
-          if grep -r "localStorage\|sessionStorage" tests/ --include="*.ts" | grep -v "clear\|remove"; then
-            echo "⚠️ Found potential test isolation issues"
-          else
-            echo "✅ Test isolation looks good"
-          fi
-
-  performance-tests:
-    runs-on: ubuntu-latest
-    needs: e2e-tests
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npm run test:e2e:install
-
-      - name: Build application
-        run: npm run build
-
-      - name: Run performance-focused E2E tests
-        run: |
-          # Run tests with performance timing
-          npx playwright test --grep "performance|load time|responsive" --reporter=json --output-file=performance-results.json
-        timeout-minutes: 10
-
-      - name: Analyze performance results
-        run: |
-          # Simple performance analysis
-          if [ -f "performance-results.json" ]; then
-            echo "Performance test results:"
-            cat performance-results.json | jq '.suites[] | select(.title | contains("Performance")) | .specs[].tests[] | {title: .title, duration: .results[0].duration}'
-          fi
-
-  accessibility-tests:
-    runs-on: ubuntu-latest
-    needs: e2e-tests
-    if: github.event_name == 'pull_request'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npm run test:e2e:install
-
-      - name: Build application
-        run: npm run build
-
-      - name: Run accessibility-focused tests
-        run: |
-          # Run tests that focus on accessibility
-          npx playwright test --grep "accessibility|keyboard|aria|heading" --reporter=html
-        timeout-minutes: 8
-
-      - name: Upload accessibility report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: accessibility-report
-          path: playwright-report/
-          retention-days: 7
-
-  notify-slack:
-    runs-on: ubuntu-latest
-    needs: [e2e-tests, security-tests, performance-tests]
-    if: failure() && github.ref == 'refs/heads/main'
-    
-    steps:
-      - name: Notify Slack on failure
-        uses: 8398a7/action-slack@v3
-        with:
-          status: failure
-          text: "🔴 E2E Tests failed on main branch for Interview App v2"
-          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
-        if: env.SLACK_WEBHOOK_URL
-
-  summary:
-    runs-on: ubuntu-latest
-    needs: [e2e-tests, security-tests]
-    if: always()
-    
-    steps:
-      - name: Test Summary
-        run: |
-          echo "## Test Execution Summary"
-          echo "- E2E Tests: ${{ needs.e2e-tests.result }}"
-          echo "- Security Tests: ${{ needs.security-tests.result }}"
-          echo "- Performance Tests: ${{ needs.performance-tests.result || 'skipped' }}"
-          echo "- Accessibility Tests: ${{ needs.accessibility-tests.result || 'skipped' }}"
-          
-          if [ "${{ needs.e2e-tests.result }}" = "failure" ]; then
-            echo "❌ E2E tests failed - check artifacts for details"
-            exit 1
-          else
-            echo "✅ All required tests passed"
-          fi

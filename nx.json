@@ -12,16 +12,16 @@
       "!{projectRoot}/src/test-setup.[jt]s",
       "!{projectRoot}/test-setup.[jt]s"
     ],
-    "sharedGlobals": ["{workspaceRoot}/.github/workflows/ci.yml"]
+    "sharedGlobals": [
+      "{workspaceRoot}/.github/workflows/ci.yml",
+      "{workspaceRoot}/nx.json",
+      "{workspaceRoot}/package.json"
+    ]
   },
   "workspaceLayout": {
     "appsDir": ".",
     "libsDir": "."
   },
-  "implicitDependencies": {
-    "examples/**/*": []
-  },
-  "nxCloudId": "6895eeced256004daaa0f4b2",
   "targetDefaults": {
     "@angular/build:application": {
       "cache": true,
