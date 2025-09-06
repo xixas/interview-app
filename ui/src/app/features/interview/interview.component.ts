@@ -167,7 +167,7 @@ interface InterviewResult {
 export class InterviewComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   protected env = inject(EnvironmentService);
-  private databaseService = inject(DatabaseIpcService);
+  private questionsService = inject(DatabaseIpcService);
   private evaluatorService = inject(EvaluatorIpcService);
   private sessionService = inject(InterviewSessionService);
   private settingsService = inject(SettingsService);
@@ -575,7 +575,7 @@ export class InterviewComponent implements OnInit, OnDestroy {
       this.isLoading.set(true);
       this.errorMessage.set('');
       
-      const stats = await this.databaseService.getTechnologies();
+      const stats = await this.questionsService.getTechnologies();
       
       // Map to expected interface format with estimated difficulty breakdown
       const techStats: TechnologyStats[] = stats.map((tech) => {
@@ -622,7 +622,7 @@ export class InterviewComponent implements OnInit, OnDestroy {
     const s = this.settings();
     const apiDifficulty = toApiDifficulty(s.difficulty);
 
-    const dbQuestions = await this.databaseService.getRandomQuestions({
+    const dbQuestions = await this.questionsService.getRandomQuestions({
       technology: s.category,                      // keep as-is
       difficulty: apiDifficulty,                   // <-- mapped for DB
       count: s.numberOfQuestions

@@ -26,6 +26,19 @@ export default class Main {
   }
 }
 
+// Prevent recursive Electron initialization when spawned as a service
+// Check if this process was spawned to run API or Evaluator services
+const isSpawnedService = process.argv.includes('dist/api/main.js') || 
+                        process.argv.includes('dist/evaluator/main.js') ||
+                        process.argv.some(arg => arg.includes('api/main.js')) ||
+                        process.argv.some(arg => arg.includes('evaluator/main.js'));
+
+if (isSpawnedService) {
+  console.log('🚫 Detected service spawn - exiting to prevent recursive initialization');
+  console.log('📋 Process arguments:', process.argv);
+  process.exit(1);
+}
+
 // handle setup events as quickly as possible
 Main.initialize();
 

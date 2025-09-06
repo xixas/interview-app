@@ -46,6 +46,7 @@
           ]
         },
         "electron": {
+          "baseHref": "./",
           "budgets": [
             {
               "type": "initial",

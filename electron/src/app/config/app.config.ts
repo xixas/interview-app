@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+import { tmpdir } from 'os';
 
 export interface AppConfig {
   ports: {
@@ -77,8 +78,9 @@ export class ConfigManager {
   private getUserDataDirectory(): string {
     let userDataPath: string;
     
-    if (app.isPackaged) {
-      // In packaged app, use system user data directory
+    // Check if running in AppImage or any packaged environment
+    if (app.isPackaged || process.env.APPIMAGE || process.env.APPDIR) {
+      // In packaged app or AppImage, use system user data directory
       userDataPath = app.getPath('userData');
     } else {
       // In development, use project data directory
@@ -86,9 +88,18 @@ export class ConfigManager {
       userDataPath = join(projectRoot, 'data');
     }
 
-    // Ensure directory exists
-    if (!existsSync(userDataPath)) {
-      mkdirSync(userDataPath, { recursive: true });
+    // Ensure directory exists (only if it's writable)
+    try {
+      if (!existsSync(userDataPath)) {
+        mkdirSync(userDataPath, { recursive: true });
+      }
+    } catch (error) {
+      console.error('Failed to create user data directory:', error);
+      // Fallback to temp directory if we can't create the preferred one
+      userDataPath = join(tmpdir(), 'interview-app-v2');
+      if (!existsSync(userDataPath)) {
+        mkdirSync(userDataPath, { recursive: true });
+      }
     }
 
     return userDataPath;
@@ -134,8 +145,8 @@ export class ConfigManager {
   }
 
   getQuestionsDbPath(): string {
-    if (app.isPackaged) {
-      // In packaged app, questions DB is in resources/assets
+    if (app.isPackaged || process.env.APPIMAGE || process.env.APPDIR) {
+      // In packaged app or AppImage, questions DB is in resources/assets
       return join(process.resourcesPath, 'assets', 'questions.db');
     } else {
       // In development, use the cleaned questions DB from project root

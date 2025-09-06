@@ -23,19 +23,21 @@
       <p-message 
         severity="warn" 
         class="w-full">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
+        <div class="flex items-center justify-between w-full">
+          <div class="flex items-center gap-2 flex-1 w-full">
             <i class="pi pi-exclamation-triangle"></i>
-            AI Evaluator service is unavailable. Please check your configuration.
+            <span>AI Evaluator service is unavailable. Please check your configuration.</span>
           </div>
-          <p-button 
-            label="Retry" 
-            icon="pi pi-refresh"
-            size="small"
-            severity="secondary"
-            outlined
-            (onClick)="refreshService()">
-          </p-button>
+          <div class="flex-shrink-0 ml-4">
+            <p-button 
+              label="Retry" 
+              icon="pi pi-refresh"
+              size="small"
+              severity="secondary"
+              outlined
+              (onClick)="refreshService()">
+            </p-button>
+          </div>
         </div>
       </p-message>
     </div>

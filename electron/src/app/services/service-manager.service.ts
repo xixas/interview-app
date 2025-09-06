@@ -21,6 +21,7 @@ export class ServiceManager {
   private databaseManager: DatabaseManager;
   private services: Map<string, ChildProcess> = new Map();
   private serviceStatus: Map<string, ServiceStatus> = new Map();
+  private handlersSetup: boolean = false;
 
   private constructor() {
     this.configManager = ConfigManager.getInstance();
@@ -51,6 +52,13 @@ export class ServiceManager {
   }
 
   private setupProcessHandlers(): void {
+    // Only setup handlers once to prevent multiple registrations
+    if (this.handlersSetup) {
+      return;
+    }
+    
+    this.handlersSetup = true;
+    
     // Cleanup services when Electron app is closing
     app.on('before-quit', () => {
       console.log('🛑 Stopping all services...');
@@ -85,28 +93,34 @@ export class ServiceManager {
         !app.isPackaged;
       
       if (!isDevelopment) {
-        await this.startAllServices();
-        
-        // Step 4: Wait for services to be ready
-        const servicesReady = await this.portManager.waitForServices();
-        
-        if (!servicesReady) {
-          throw new Error('Services failed to start properly');
+        try {
+          await this.startAllServices();
+          
+          // Step 4: Wait for services to be ready (with timeout)
+          const servicesReady = await Promise.race([
+            this.portManager.waitForServices(),
+            new Promise(resolve => setTimeout(() => resolve(false), 20000)) // 20 second timeout
+          ]);
+          
+          if (!servicesReady) {
+            console.warn('⚠️ Services not ready within timeout, continuing anyway');
+          } else {
+            console.log('✅ All services are ready');
+          }
+        } catch (serviceError) {
+          console.warn('⚠️ Service startup encountered issues:', serviceError);
+          console.log('📱 App will continue with limited functionality');
         }
       } else {
         console.log('🏃 Development mode: Using external services on ports 3000 and 3001');
       }
       
-      console.log('✅ All services initialized and ready');
+      console.log('✅ Service initialization completed');
     } catch (error) {
       console.error('❌ Service initialization failed:', error);
-      const isDevelopment = 'ELECTRON_IS_DEV' in process.env ? 
-        parseInt(process.env.ELECTRON_IS_DEV, 10) === 1 : 
-        !app.isPackaged;
-      if (!isDevelopment) {
-        await this.stopAllServices();
-      }
-      throw error;
+      
+      // Don't throw the error - let the app continue with degraded functionality
+      console.warn('⚠️ App will continue with limited functionality');
     }
   }
 
@@ -143,7 +157,7 @@ export class ServiceManager {
           PORT: apiPort.toString()
         };
 
-        const apiProcess = spawn('node', [this.getApiServicePath()], {
+        const apiProcess = spawn(this.getNodeExecutable(), [this.getApiServicePath()], {
           env,
           stdio: ['pipe', 'pipe', 'pipe'],
           cwd: this.getApiWorkingDirectory()
@@ -194,8 +208,16 @@ export class ServiceManager {
 
         // Timeout after 15 seconds
         setTimeout(() => {
-          if (!this.serviceStatus.get('api')?.running) {
-            reject(new Error('API service startup timeout'));
+          const status = this.serviceStatus.get('api');
+          if (!status?.running) {
+            console.warn('⚠️ API service startup timeout - continuing without API');
+            this.serviceStatus.set('api', {
+              name: 'API Service',
+              running: false,
+              error: 'Startup timeout'
+            });
+            // Don't reject - just resolve to continue app startup
+            resolve();
           }
         }, 15000);
 
@@ -225,7 +247,7 @@ export class ServiceManager {
           PORT: evaluatorPort.toString()
         };
 
-        const evaluatorProcess = spawn('node', [this.getEvaluatorServicePath()], {
+        const evaluatorProcess = spawn(this.getNodeExecutable(), [this.getEvaluatorServicePath()], {
           env,
           stdio: ['pipe', 'pipe', 'pipe'],
           cwd: this.getEvaluatorWorkingDirectory()
@@ -275,8 +297,16 @@ export class ServiceManager {
 
         // Timeout after 15 seconds
         setTimeout(() => {
-          if (!this.serviceStatus.get('evaluator')?.running) {
-            reject(new Error('Evaluator service startup timeout'));
+          const status = this.serviceStatus.get('evaluator');
+          if (!status?.running) {
+            console.warn('⚠️ Evaluator service startup timeout - continuing without evaluator');
+            this.serviceStatus.set('evaluator', {
+              name: 'Evaluator Service',
+              running: false,
+              error: 'Startup timeout'
+            });
+            // Don't reject - just resolve to continue app startup
+            resolve();
           }
         }, 15000);
 
@@ -362,6 +392,10 @@ export class ServiceManager {
       !app.isPackaged;
     
     if (!isDevelopment) {
+      // Check if running from AppImage
+      if (process.env.APPIMAGE || process.env.APPDIR) {
+        return join(process.resourcesPath, 'app', 'dist', 'api', 'main.js');
+      }
       return join(process.resourcesPath, 'app', 'dist', 'api', 'main.js');
     } else {
       return join(process.cwd(), 'dist', 'api', 'main.js');
@@ -374,6 +408,10 @@ export class ServiceManager {
       !app.isPackaged;
     
     if (!isDevelopment) {
+      // Check if running from AppImage
+      if (process.env.APPIMAGE || process.env.APPDIR) {
+        return join(process.resourcesPath, 'app', 'dist', 'evaluator', 'main.js');
+      }
       return join(process.resourcesPath, 'app', 'dist', 'evaluator', 'main.js');
     } else {
       return join(process.cwd(), 'dist', 'evaluator', 'main.js');
@@ -386,6 +424,10 @@ export class ServiceManager {
       !app.isPackaged;
     
     if (!isDevelopment) {
+      // Check if running from AppImage
+      if (process.env.APPIMAGE || process.env.APPDIR) {
+        return join(process.resourcesPath, 'app');
+      }
       return join(process.resourcesPath, 'app');
     } else {
       return process.cwd();
@@ -398,9 +440,32 @@ export class ServiceManager {
       !app.isPackaged;
     
     if (!isDevelopment) {
+      // Check if running from AppImage
+      if (process.env.APPIMAGE || process.env.APPDIR) {
+        return join(process.resourcesPath, 'app');
+      }
       return join(process.resourcesPath, 'app');
     } else {
       return process.cwd();
+    }
+  }
+
+  /**
+   * Get Node.js executable path for spawning services
+   * CRITICAL: Always use system Node.js, never Electron executable
+   */
+  private getNodeExecutable(): string {
+    const isDevelopment = 'ELECTRON_IS_DEV' in process.env ? 
+      parseInt(process.env.ELECTRON_IS_DEV, 10) === 1 : 
+      !app.isPackaged;
+    
+    if (!isDevelopment) {
+      // In production/AppImage, always use system Node.js
+      // NEVER use process.execPath as it returns Electron executable in AppImage
+      console.log('🔧 Using system Node.js for service spawning (preventing recursive Electron startup)');
+      return 'node';
+    } else {
+      return 'node';
     }
   }
 }

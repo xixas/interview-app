@@ -71,17 +71,31 @@ import { InterviewResponse } from './entities/interview-response.entity';
 export class AppModule {}
 
 function getQuestionsDbPath(): string {
-  // From dist/api, go up two levels to get to project root
+  // Use environment variable set by Electron service manager, fallback to default
+  const envPath = process.env.QUESTIONS_DB_PATH;
+  if (envPath) {
+    console.log('Questions DB path (from env):', envPath);
+    return envPath;
+  }
+  
+  // Fallback: From dist/api, go up two levels to get to project root
   const rootPath = join(__dirname, '..', '..');
-  const dbPath = join(rootPath, 'data', 'questions.db');
-  console.log('Questions DB path:', dbPath);
+  const dbPath = join(rootPath, 'api', 'src', 'assets', 'questions.db');
+  console.log('Questions DB path (fallback):', dbPath);
   return dbPath;
 }
 
 function getUserHistoryDbPath(): string {
-  // From dist/api, go up two levels to get to project root
+  // Use environment variable set by Electron service manager, fallback to default
+  const envPath = process.env.USER_HISTORY_DB_PATH;
+  if (envPath) {
+    console.log('User History DB path (from env):', envPath);
+    return envPath;
+  }
+  
+  // Fallback: From dist/api, go up two levels to get to project root
   const rootPath = join(__dirname, '..', '..');
   const dbPath = join(rootPath, 'data', 'user-history.db');
-  console.log('User History DB path:', dbPath);
+  console.log('User History DB path (fallback):', dbPath);
   return dbPath;
 }

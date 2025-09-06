@@ -23,23 +23,25 @@
         <div class="mb-6 space-y-3">
           <!-- API Key Warning -->
           @if (apiKeyError()) {
-            <p-message severity="warn" [closable]="false">
+            <p-message severity="warn" [closable]="false" class="w-full">
               <div class="flex items-center justify-between w-full">
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 flex-1">
                   <i class="pi pi-key text-orange-600"></i>
                   <div>
                     <div class="font-medium">OpenAI API Key Required</div>
                     <div class="text-sm text-muted-color">{{ apiKeyError() }}</div>
                   </div>
                 </div>
-                <p-button 
-                  label="Configure API Key"
-                  icon="pi pi-cog"
-                  size="small"
-                  severity="warn"
-                  outlined
-                  (onClick)="navigateToSettings()">
-                </p-button>
+                <div class="flex-shrink-0 ml-4">
+                  <p-button 
+                    label="Configure API Key"
+                    icon="pi pi-cog"
+                    size="small"
+                    severity="warn"
+                    outlined
+                    (onClick)="navigateToSettings()">
+                  </p-button>
+                </div>
               </div>
             </p-message>
           }

@@ -8,6 +8,8 @@ import { OpenAI } from 'openai';
 import { DatabaseService } from '../services/database.service';
 import { EvaluatorService } from '../services/evaluator.service';
 import { InterviewSessionService } from '../services/interview-session.service';
+import { PortManager } from '../services/port-manager.service';
+import { databaseQueue } from '../database/database-queue';
 
 export class IPCHandlers {
   private settings: Map<string, any> = new Map();
@@ -15,6 +17,7 @@ export class IPCHandlers {
   private databaseService: DatabaseService;
   private evaluatorService: EvaluatorService;
   private interviewSessionService: InterviewSessionService;
+  private portManager: PortManager;
 
   constructor() {
     this.settingsPath = join(app.getPath('userData'), 'settings.json');
@@ -24,6 +27,7 @@ export class IPCHandlers {
     this.evaluatorService = new EvaluatorService('http://localhost:3001', this.settings);
     // Initialize interview session service with API base URL
     this.interviewSessionService = new InterviewSessionService(this.settings.get('apiUrl') || 'http://localhost:3000');
+    this.portManager = PortManager.getInstance();
     this.registerHandlers();
   }
 
@@ -328,15 +332,19 @@ export class IPCHandlers {
       }
     });
 
-    // Database IPC handlers
+    // Database IPC handlers (using queue to prevent concurrent access)
     ipcMain.handle('db-initialize', async () => {
       try {
-        console.log('IPC Handler: db-initialize called');
-        await this.databaseService.initialize();
-        console.log('IPC Handler: Database initialized successfully');
+        
+        const startTime = Date.now();
+        const result = await databaseQueue.execute(async () => {
+          await this.databaseService.initialize();
+          return true;
+        }, 30000); // 30 second timeout for initialization
+        
+        const endTime = Date.now();
         return { success: true, message: 'Database initialized successfully' };
       } catch (error) {
-        console.error('IPC Handler: Database initialization failed:', error);
         return { success: false, error: error.message };
       }
     });
@@ -344,8 +352,12 @@ export class IPCHandlers {
     ipcMain.handle('db-get-technologies', async () => {
       try {
         console.log('IPC Handler: db-get-technologies called');
-        const technologies = await this.databaseService.getTechnologies();
-        console.log('IPC Handler: Got technologies:', technologies);
+        
+        const technologies = await databaseQueue.execute(async () => {
+          return await this.databaseService.getTechnologies();
+        }, 10000); // 10 second timeout
+        
+        console.log(`IPC Handler: Retrieved ${technologies.length} technologies`);
         return { success: true, data: technologies };
       } catch (error) {
         console.error('IPC Handler: Failed to get technologies:', error);
@@ -355,20 +367,55 @@ export class IPCHandlers {
 
     ipcMain.handle('db-get-random-questions', async (_, filters) => {
       try {
-        const questions = await this.databaseService.getRandomQuestions(filters);
+        console.log('IPC Handler: db-get-random-questions called with filters:', filters);
+        
+        const questions = await databaseQueue.execute(async () => {
+          return await this.databaseService.getRandomQuestions(filters);
+        }, 15000); // 15 second timeout
+        
+        console.log(`IPC Handler: Retrieved ${questions.length} random questions`);
         return { success: true, data: questions };
       } catch (error) {
-        console.error('Failed to get random questions:', error);
+        console.error('IPC Handler: Failed to get random questions:', error);
         return { success: false, error: error.message };
       }
     });
 
     ipcMain.handle('db-get-questions-by-technology', async (_, technology) => {
       try {
-        const questions = await this.databaseService.getQuestionsByTechnology(technology);
+        console.log('IPC Handler: db-get-questions-by-technology called with technology:', technology);
+        
+        const questions = await databaseQueue.execute(async () => {
+          return await this.databaseService.getQuestionsByTechnology(technology);
+        }, 15000); // 15 second timeout
+        
+        console.log(`IPC Handler: Retrieved ${questions.length} questions for technology: ${technology}`);
         return { success: true, data: questions };
       } catch (error) {
-        console.error('Failed to get questions by technology:', error);
+        console.error('IPC Handler: Failed to get questions by technology:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    // Expose service configuration for HTTP API calls
+    ipcMain.handle('get-service-config', async () => {
+      try {
+        console.log('IPC Handler: get-service-config called - providing service ports');
+        const ports = this.portManager.getAllocatedPorts();
+        if (!ports) {
+          return { success: false, error: 'Service ports not allocated yet' };
+        }
+        
+        return {
+          success: true,
+          data: {
+            apiUrl: `http://localhost:${ports.api}/api`,
+            evaluatorUrl: `http://localhost:${ports.evaluator}/api`,
+            ports: ports
+          }
+        };
+      } catch (error) {
+        console.error('IPC Handler: Failed to get service config:', error);
         return { success: false, error: error.message };
       }
     });
@@ -703,7 +750,7 @@ export class IPCHandlers {
       'updater-download', 'updater-install',
       // Database and evaluator channels
       'db-initialize', 'db-get-technologies', 'db-get-random-questions', 
-      'db-get-questions-by-technology', 'evaluator-transcribe', 
+      'db-get-questions-by-technology', 'get-service-config', 'evaluator-transcribe', 
       'evaluator-evaluate-answer', 'evaluator-evaluate-audio-answer',
       'evaluator-batch-evaluate', 'evaluator-generate-summary', 'evaluator-validate-key',
       // Interview Session IPC channels

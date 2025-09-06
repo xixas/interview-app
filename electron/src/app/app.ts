@@ -66,10 +66,7 @@ export default class App {
         App.configManager = ConfigManager.getInstance();
         App.serviceManager = ServiceManager.getInstance();
         
-        // Initialize services (databases, ports, start backend services)
-        await App.serviceManager.initializeServices();
-        
-        // Create and show the main window
+        // Create and show the main window first (for better UX)
         App.initMainWindow();
         App.loadMainWindow();
         App.setupApplicationMenu();
@@ -79,18 +76,29 @@ export default class App {
           App.ipcHandlers = new IPCHandlers();
         }
         
+        // Initialize services in the background (don't block UI)
+        App.serviceManager.initializeServices().catch(error => {
+          console.error('❌ Service initialization failed:', error);
+          // Don't show error dialog immediately - let user see the app
+          // Services will be retried when needed
+        });
+        
         console.log('✅ Application ready');
       } catch (error) {
         console.error('❌ Failed to initialize application:', error);
         
-        // Show error dialog to user
-        const { dialog } = await import('electron');
-        dialog.showErrorBox('Startup Error', 
-          `Failed to start the application: ${error.message}\n\nThis may be due to port conflicts or missing dependencies.`
-        );
-        
-        // Quit the application
-        App.application.quit();
+        // Only quit on critical errors, not service startup failures
+        if (error.message.includes('window') || error.message.includes('preload')) {
+          // Show error dialog only for critical UI errors
+          const { dialog } = await import('electron');
+          dialog.showErrorBox('Critical Error', 
+            `Failed to start the application: ${error.message}`
+          );
+          App.application.quit();
+        } else {
+          // For service errors, just log and continue
+          console.warn('Non-critical startup error, continuing...');
+        }
       }
     }
   }
@@ -152,9 +160,13 @@ export default class App {
       App.mainWindow.loadURL(`http://localhost:3002`);
     } else {
       // In packaged app, load from local files
+      // In AppImage, __dirname is /tmp/.mount_*/resources/app, files are in ui/ subdirectory
+      const uiPath = join(__dirname, rendererAppName, 'index.html');
+      console.log('Loading UI from path:', uiPath);
+      
       App.mainWindow.loadURL(
         format({
-          pathname: join(__dirname, '..', rendererAppName, 'index.html'),
+          pathname: uiPath,
           protocol: 'file:',
           slashes: true,
         })

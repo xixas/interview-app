@@ -74,6 +74,7 @@ contextBridge.exposeInMainWorld('electron', {
     openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
     showInFolder: (path: string) => ipcRenderer.invoke('show-in-folder', path),
     getSystemInfo: () => ipcRenderer.invoke('get-system-info'),
+    getServiceConfig: () => ipcRenderer.invoke('get-service-config'),
   },
   
   // Application settings

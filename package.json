@@ -1,7 +1,13 @@
 {
-  "name": "@interview-app-v2/source",
-  "version": "0.0.0",
+  "name": "@interview-app/source",
+  "version": "1.0.0",
   "license": "MIT",
+  "description": "AI-powered mock interview practice application",
+  "author": {
+    "name": "Vikas Kyatannwar",
+    "email": "vikas.k@osmosys.co"
+  },
+  "homepage": "https://github.com/osmosys/interview-app",
   "scripts": {
     "postinstall": "electron-builder install-app-deps",
     "nxe:build:frontend": "nx build ui",
@@ -17,6 +23,15 @@
     "migration:run:history": "cd api && npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d src/user-history-data-source.ts",
     "migration:revert:history": "cd api && npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:revert -d src/user-history-data-source.ts",
     "build": "nx run-many -t build --projects=ui,api,evaluator,electron",
+    "build:electron": "nx build ui --configuration=electron && nx build api && nx build evaluator && nx build electron",
+    "build:appimage": "npm run build:electron && npm run package:appimage",
+    "package:appimage": "electron-builder --linux AppImage",
+    "package:all-platforms": "electron-builder --linux --win --mac",
+    "package:win": "electron-builder --win",
+    "package:mac": "electron-builder --mac",
+    "docker:build:all": "docker run --rm --env ELECTRON_CACHE=/root/.cache/electron --env ELECTRON_BUILDER_CACHE=/root/.cache/electron-builder -v $(pwd):/project -v $(pwd)-node-modules:/project/node_modules -v ~/.cache/electron:/root/.cache/electron -v ~/.cache/electron-builder:/root/.cache/electron-builder electronuserland/builder:wine /bin/bash -c \"cd /project && npm install && npm run package:all-platforms\"",
+    "docker:build:win": "docker run --rm --env ELECTRON_CACHE=/root/.cache/electron --env ELECTRON_BUILDER_CACHE=/root/.cache/electron-builder -v $(pwd):/project -v $(pwd)-node-modules:/project/node_modules -v ~/.cache/electron:/root/.cache/electron -v ~/.cache/electron-builder:/root/.cache/electron-builder electronuserland/builder:wine /bin/bash -c \"cd /project && npm install && npm run package:win\"",
+    "docker:build:mac": "docker run --rm --env ELECTRON_CACHE=/root/.cache/electron --env ELECTRON_BUILDER_CACHE=/root/.cache/electron-builder -v $(pwd):/project -v $(pwd)-node-modules:/project/node_modules -v ~/.cache/electron:/root/.cache/electron -v ~/.cache/electron-builder:/root/.cache/electron-builder electronuserland/builder:wine /bin/bash -c \"cd /project && npm install && npm run package:mac\"",
     "test": "nx run-many -t test --all",
     "lint": "nx run-many -t lint --all",
     "dev": "concurrently \"npm run serve:api\" \"npm run serve:evaluator\" \"npm run nxe:serve:frontend\"",
@@ -58,6 +73,7 @@
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.2.0",
     "electron": "^34.5.6",
+    "electron-builder": "^24.13.3",
     "eslint": "^9.8.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-playwright": "^1.6.2",
@@ -115,5 +131,112 @@
   },
   "nx": {
     "includedScripts": []
+  },
+  "build": {
+    "productName": "Interview App",
+    "appId": "com.osmosys.interview-app",
+    "directories": {
+      "buildResources": "build-resources",
+      "output": "release"
+    },
+    "npmRebuild": false,
+    "buildDependenciesFromSource": false,
+    "nodeGypRebuild": false,
+    "asar": false,
+    "includeSubNodeModules": true,
+    "files": [
+      {
+        "from": "dist/electron",
+        "to": ".",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "dist/ui/browser",
+        "to": "ui", 
+        "filter": ["**/*"]
+      },
+      {
+        "from": "node_modules/sqlite3",
+        "to": "node_modules/sqlite3",
+        "filter": ["**/*"]
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "dist/api",
+        "to": "app/dist/api",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "dist/evaluator",
+        "to": "app/dist/evaluator",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "api/src/assets/questions.db",
+        "to": "assets/questions.db"
+      },
+      {
+        "from": "node_modules/sqlite3",
+        "to": "app/node_modules/sqlite3",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "node_modules/typeorm",
+        "to": "app/node_modules/typeorm",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Development",
+      "icon": "build-resources/icon.png",
+      "desktop": {
+        "Name": "Interview App",
+        "Comment": "AI-powered mock interview practice application",
+        "Categories": "Development;Education;",
+        "Keywords": "interview;practice;ai;education;",
+        "StartupNotify": "true"
+      }
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build-resources/icon.ico"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build-resources/icon.icns",
+      "category": "public.app-category.developer-tools"
+    }
   }
 }

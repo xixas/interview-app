@@ -85,6 +85,27 @@ export class PortManager {
       return this.allocatedPorts;
     }
 
+    // First check if development services are available
+    const developmentServicesAvailable = await this.checkDevelopmentServices();
+    
+    if (developmentServicesAvailable) {
+      console.log('🏃 Development mode: Using existing services on ports 3000 and 3001');
+      
+      this.allocatedPorts = {
+        api: 3000,
+        evaluator: 3001,
+        ui: 3002 // Still need a UI port for dev server
+      };
+
+      // Update config manager with development ports
+      this.configManager.setApiPort(3000);
+      this.configManager.setEvaluatorPort(3001);
+      this.configManager.setUiPort(3002);
+
+      console.log('🚀 Using development services:', this.allocatedPorts);
+      return this.allocatedPorts;
+    }
+
     const config = this.configManager.getConfig();
     
     try {
@@ -169,6 +190,20 @@ export class PortManager {
       return apiHealthy && evaluatorHealthy;
     } catch (error) {
       console.error('Service validation failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if development services are available
+   */
+  async checkDevelopmentServices(): Promise<boolean> {
+    try {
+      const apiHealthy = await this.checkServiceHealth('http://localhost:3000/api/health');
+      const evaluatorHealthy = await this.checkServiceHealth('http://localhost:3001/api/evaluator/health');
+      
+      return apiHealthy && evaluatorHealthy;
+    } catch (error) {
       return false;
     }
   }

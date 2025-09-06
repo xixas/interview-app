@@ -48,6 +48,18 @@ Thumbs.db
 # Developer documentation and guides (created for developer reference, not for repo)
 CLAUDE.md
 SESSION_CONTEXT.md
+
+# Build outputs and releases
+release/
+dist/
+
+# Debug and test scripts (temporary)
+debug-env-vars.sh
+test-appimage.sh
+
+# Build caches
+.nx/cache
+.nx/workspace-data
 IMPLEMENTATION_SUMMARY.md
 TESTING_GUIDE.md
 PLAYWRIGHT_TESTING_GUIDE.md
