@@ -142,7 +142,10 @@
     "npmRebuild": false,
     "buildDependenciesFromSource": false,
     "nodeGypRebuild": false,
-    "asar": false,
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/sqlite3/**/*"
+    ],
     "includeSubNodeModules": true,
     "files": [
       {
@@ -179,20 +182,6 @@
       {
         "from": "api/src/assets/questions.db",
         "to": "assets/questions.db"
-      },
-      {
-        "from": "node_modules/sqlite3",
-        "to": "app/node_modules/sqlite3",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "node_modules/typeorm",
-        "to": "app/node_modules/typeorm",
-        "filter": [
-          "**/*"
-        ]
       }
     ],
     "linux": {

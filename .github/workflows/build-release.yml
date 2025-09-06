@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
+      - name: Clean release directory
+        run: rm -rf release/
+        
       - name: Build application
         run: npm run build:electron
 
@@ -65,6 +68,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
+      - name: Clean release directory
+        run: rm -rf release/
+        
       - name: Build application
         run: npm run build:electron
 
@@ -98,6 +104,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
+      - name: Clean release directory
+        run: rm -rf release/
+        
       - name: Build application
         run: npm run build:electron
 
