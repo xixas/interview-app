@@ -37,24 +37,11 @@
   "lint": "nx run-many -t lint --all",
   "dev": "concurrently \"npm run serve:api\" \"npm run serve:evaluator\" \"npm run nxe:serve:frontend\"",
   "dev:electron": "concurrently \"npm run serve:api\" \"npm run serve:evaluator\" \"npm run nxe:serve:frontend\" \"wait-on http://localhost:3002 && npm run nxe:serve:backend\"",
-
-  // ---------- native rebuild + packaging helpers ----------
-  // Rebuild sqlite3 only for the Electron runtime (fast)
   "prebuild:rebuild-native": "npx electron-rebuild -f -v 34.5.6 -w sqlite3",
-
-  // Rebuild ALL native modules for Electron (slower, but safer)
   "prebuild:rebuild-native:all": "npx electron-rebuild -f -v 34.5.6",
-
-  // Linux AppImage (rebuild then package)
   "package:appimage-rebuild": "npm run prebuild:rebuild-native && electron-builder --linux AppImage",
-
-  // Windows installer (rebuild then package). Use on Windows or in Wine Docker.
   "package:win-rebuild": "npm run prebuild:rebuild-native && electron-builder --win nsis",
-
-  // macOS dmg (rebuild then package). Must run on macOS (or on macOS runner).
   "package:mac-rebuild": "npm run prebuild:rebuild-native && electron-builder --mac",
-
-  // Build all targets after rebuilding (use with proper platform/CI)
   "package:all-rebuild": "npm run prebuild:rebuild-native:all && electron-builder --linux --win --mac"
 }
 ,
