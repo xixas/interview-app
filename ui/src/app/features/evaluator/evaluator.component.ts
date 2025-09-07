@@ -64,13 +64,18 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
     recordingDuration = signal(0);
     audioDuration = signal(0);
     isPlayingAudio = signal(false);
-    
+    audioLevel = signal(0); // Audio level indicator (0-100)
+
     private mediaRecorder: MediaRecorder | null = null;
     private audioChunks: Blob[] = [];
     private audioUrl: string | null = null;
-    private recordingTimer: any = null;
+    private recordingTimer: number | null = null;
     private recordingStartTime = 0;
     private currentAudio: HTMLAudioElement | null = null;
+    private audioContext: AudioContext | null = null;
+    private analyser: AnalyserNode | null = null;
+    private microphone: MediaStreamAudioSourceNode | null = null;
+    private levelCheckInterval: number | null = null;
 
     // Component state
     isEvaluating = signal(false);
@@ -104,6 +109,7 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
 
     ngOnDestroy() {
         this.cleanupRecording();
+        this.cleanupAudioContext();
         if (this.audioUrl) {
             URL.revokeObjectURL(this.audioUrl);
         }
@@ -139,9 +145,10 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
                 this.serviceStatus.set('unavailable');
                 this.errorMessage.set(validationResult.message || 'API key validation failed. Please check your configuration.');
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             this.serviceStatus.set('unavailable');
-            this.errorMessage.set(error.message || 'Service unavailable. Please ensure you are running the desktop application.');
+            const errorMessage = error instanceof Error ? error.message : 'Service unavailable. Please ensure you are running the desktop application.';
+            this.errorMessage.set(errorMessage);
         } finally {
             this.isCheckingService.set(false);
         }
@@ -224,26 +231,28 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
             } else {
                 throw new Error('No evaluation result received');
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Audio evaluation failed:', error);
             
             // Provide specific error messages based on error type
-            if (error.status === 0) {
+            const httpError = error as { status?: number; message?: string };
+            if (httpError.status === 0) {
                 this.errorMessage.set('Cannot connect to evaluation service. Please ensure the evaluator service is running on port 3001.');
-            } else if (error.status === 401) {
+            } else if (httpError.status === 401) {
                 this.errorMessage.set('OpenAI API key is not configured or invalid. Please check your API key configuration in the evaluator service.');
-            } else if (error.status === 429) {
+            } else if (httpError.status === 429) {
                 this.errorMessage.set('API rate limit exceeded. Please wait a moment before trying again.');
-            } else if (error.status === 413) {
+            } else if (httpError.status === 413) {
                 this.errorMessage.set('Audio file is too large. Please record a shorter answer or check the service configuration.');
-            } else if (error.status === 400) {
+            } else if (httpError.status === 400) {
                 this.errorMessage.set('Invalid request format. Please ensure all required fields are filled correctly.');
-            } else if (error.status === 500) {
+            } else if (httpError.status === 500) {
                 this.errorMessage.set('Internal server error. Please check the evaluator service logs and ensure your OpenAI API key is valid.');
-            } else if (error.status >= 500) {
+            } else if (httpError.status && httpError.status >= 500) {
                 this.errorMessage.set('Server error. The evaluation service is temporarily unavailable. Please try again later.');
             } else {
-                this.errorMessage.set(`Audio evaluation failed: ${error.message || 'Unknown error occurred. Please try again.'}`);
+                const errorMessage = httpError.message || (error instanceof Error ? error.message : 'Unknown error occurred. Please try again.');
+                this.errorMessage.set(`Audio evaluation failed: ${errorMessage}`);
             }
             
             // Increment retry count for potential auto-retry logic
@@ -270,32 +279,81 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
 
         try {
             this.errorMessage.set('');
+            console.log('🎤 Starting audio recording...');
 
-            // Request microphone access
-            const stream = await navigator.mediaDevices.getUserMedia({ 
+            // Check microphone permission first
+            if (navigator.permissions) {
+                const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+                console.log('🔒 Microphone permission state:', permission.state);
+                if (permission.state === 'denied') {
+                    this.errorMessage.set('Microphone access denied. Please enable microphone permissions in your browser settings.');
+                    return;
+                }
+            }
+
+            // Request microphone access with enhanced settings
+            console.log('🎤 Requesting microphone access...');
+            const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                } 
+                    echoCancellation: false,  // Disable to get raw audio
+                    noiseSuppression: false,  // Disable to capture all audio
+                    autoGainControl: true,    // Keep this for volume adjustment
+                    sampleRate: 44100,        // High quality sample rate
+                    channelCount: 1,          // Mono recording
+                }
             });
+
+            console.log('✅ Microphone access granted');
+            console.log('🎵 Audio stream settings:', stream.getAudioTracks()[0].getSettings());
+
+            // Set up audio level monitoring
+            this.setupAudioLevelMonitoring(stream);
 
             // Reset previous recording data
             this.audioChunks = [];
             this.recordedAudio.set(null);
             this.recordingDuration.set(0);
+            this.audioLevel.set(0);
             if (this.audioUrl) {
                 URL.revokeObjectURL(this.audioUrl);
                 this.audioUrl = null;
             }
 
-            // Create MediaRecorder
-            this.mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm;codecs=opus'
-            });
+            // Create MediaRecorder with better error handling
+            let mimeType = 'audio/webm;codecs=opus';
+            try {
+                if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                    this.mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: 'audio/webm;codecs=opus',
+                        audioBitsPerSecond: 128000  // Higher bitrate for better quality
+                    });
+                    console.log('🎵 Using WebM with Opus codec');
+                } else {
+                    throw new Error('Opus not supported');
+                }
+            } catch (error) {
+                console.warn('⚠️ Opus codec not supported, trying fallback formats...', error);
+                // Try other formats
+                if (MediaRecorder.isTypeSupported('audio/webm')) {
+                    this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                    mimeType = 'audio/webm';
+                    console.log('🎵 Using WebM without codec specification');
+                } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/mp4' });
+                    mimeType = 'audio/mp4';
+                    console.log('🎵 Using MP4 format');
+                } else {
+                    this.mediaRecorder = new MediaRecorder(stream);
+                    mimeType = 'audio/webm'; // Default assumption
+                    console.log('🎵 Using default MediaRecorder format');
+                }
+            }
+
+            console.log('🎵 MediaRecorder created with MIME type:', mimeType);
 
             // Handle data available event
             this.mediaRecorder.ondataavailable = (event) => {
+                console.log('📊 Audio data chunk received:', event.data.size, 'bytes');
                 if (event.data.size > 0) {
                     this.audioChunks.push(event.data);
                 }
@@ -303,14 +361,24 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
 
             // Handle recording stop
             this.mediaRecorder.onstop = () => {
+                console.log('⏹️ Recording stopped, processing audio...');
                 this.processRecordedAudio();
                 stream.getTracks().forEach(track => track.stop());
             };
 
-            // Start recording
-            this.mediaRecorder.start();
+            // Handle errors
+            this.mediaRecorder.onerror = (event) => {
+                console.error('❌ MediaRecorder error:', event);
+                this.errorMessage.set('Recording error occurred. Please try again.');
+                this.isRecording.set(false);
+            };
+
+            // Start recording with frequent data collection
+            this.mediaRecorder.start(1000); // Collect data every second
             this.isRecording.set(true);
             this.recordingStartTime = Date.now();
+
+            console.log('🔴 Recording started at:', new Date(this.recordingStartTime).toISOString());
 
             // Start duration timer
             this.recordingTimer = setInterval(() => {
@@ -321,6 +389,7 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
             // Auto-stop after 5 minutes
             setTimeout(() => {
                 if (this.isRecording()) {
+                    console.log('⏰ Auto-stopping recording after 5 minutes');
                     this.stopRecording();
                 }
             }, 300000);
@@ -348,7 +417,17 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
             clearInterval(this.recordingTimer);
             this.recordingTimer = null;
         }
+
+        if (this.levelCheckInterval) {
+            clearInterval(this.levelCheckInterval);
+            this.levelCheckInterval = null;
+        }
+
         this.isRecording.set(false);
+        this.audioLevel.set(0);
+
+        // Clean up audio context
+        this.cleanupAudioContext();
 
         // Stop MediaRecorder if active
         if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
@@ -356,22 +435,163 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
         }
     }
 
+    private setupAudioLevelMonitoring(stream: MediaStream) {
+        try {
+            console.log('🎵 Setting up audio level monitoring...');
+
+            // Create audio context
+            const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+            this.audioContext = new AudioContextClass();
+            this.analyser = this.audioContext.createAnalyser();
+            this.microphone = this.audioContext.createMediaStreamSource(stream);
+
+            // Configure analyser
+            this.analyser.fftSize = 256;
+            this.analyser.smoothingTimeConstant = 0.8;
+
+            // Connect microphone to analyser
+            this.microphone.connect(this.analyser);
+
+            // Start monitoring audio levels
+            this.startAudioLevelCheck();
+
+            console.log('✅ Audio level monitoring setup complete');
+        } catch (error) {
+            console.warn('⚠️ Could not setup audio level monitoring:', error);
+            // Continue without level monitoring
+        }
+    }
+
+    private startAudioLevelCheck() {
+        if (!this.analyser) return;
+
+        const bufferLength = this.analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        this.levelCheckInterval = setInterval(() => {
+            if (!this.analyser || !this.isRecording()) return;
+
+            this.analyser.getByteFrequencyData(dataArray);
+
+            // Calculate average volume
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) {
+                sum += dataArray[i];
+            }
+            const average = sum / bufferLength;
+
+            // Convert to percentage (0-100)
+            const level = Math.round((average / 255) * 100);
+            this.audioLevel.set(level);
+
+        }, 100); // Update every 100ms
+    }
+
+    private cleanupAudioContext() {
+        if (this.microphone) {
+            this.microphone.disconnect();
+            this.microphone = null;
+        }
+
+        if (this.analyser) {
+            this.analyser.disconnect();
+            this.analyser = null;
+        }
+
+        if (this.audioContext && this.audioContext.state !== 'closed') {
+            this.audioContext.close();
+            this.audioContext = null;
+        }
+    }
+
     private processRecordedAudio() {
+        console.log('🔄 Processing recorded audio...');
+        console.log('📊 Audio chunks count:', this.audioChunks.length);
+
         if (this.audioChunks.length === 0) {
-            this.errorMessage.set('No audio data recorded. Please try again.');
+            console.error('❌ No audio chunks recorded');
+            this.errorMessage.set('No audio data recorded. Please check your microphone and try again.');
             return;
         }
 
-        // Create audio blob
-        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-        this.recordedAudio.set(audioBlob);
-        this.audioUrl = URL.createObjectURL(audioBlob);
+        try {
+            // Log chunk sizes for debugging
+            const chunkSizes = this.audioChunks.map(chunk => chunk.size);
+            const totalSize = chunkSizes.reduce((sum, size) => sum + size, 0);
+            console.log('📊 Audio chunk sizes:', chunkSizes);
+            console.log('📊 Total audio data size:', totalSize, 'bytes');
 
-        // Calculate audio duration (approximate from recording time)
-        const duration = Math.floor((Date.now() - this.recordingStartTime) / 1000);
-        this.audioDuration.set(duration);
+            if (totalSize < 1000) {
+                console.warn('⚠️ Audio data seems very small, might indicate recording issues');
+            }
 
-        // Audio recording complete - ready for evaluation
+            // Create audio blob with proper MIME type detection
+            let audioBlob: Blob;
+            let mimeType = 'audio/webm';
+
+            // Check the first chunk to determine the actual format
+            if (this.audioChunks.length > 0 && this.audioChunks[0].type) {
+                mimeType = this.audioChunks[0].type;
+                console.log('🎵 Detected MIME type from chunk:', mimeType);
+            }
+
+            try {
+                audioBlob = new Blob(this.audioChunks, { type: mimeType });
+                console.log('✅ Audio blob created with type:', mimeType);
+            } catch (e) {
+                console.warn('⚠️ Blob creation failed with detected type, using fallback:', e);
+                audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                mimeType = 'audio/webm';
+            }
+
+            this.recordedAudio.set(audioBlob);
+
+            // Clean up previous audio URL if it exists
+            if (this.audioUrl) {
+                URL.revokeObjectURL(this.audioUrl);
+            }
+
+            this.audioUrl = URL.createObjectURL(audioBlob);
+            console.log('🔗 Audio URL created:', this.audioUrl);
+            console.log('📊 Final audio blob size:', audioBlob.size, 'bytes');
+            console.log('🎵 Final audio blob type:', audioBlob.type);
+
+            // Calculate audio duration (approximate from recording time)
+            const duration = Math.floor((Date.now() - this.recordingStartTime) / 1000);
+            this.audioDuration.set(duration);
+
+            console.log('⏱️ Recording duration:', duration, 'seconds');
+            console.log('✅ Audio processing complete');
+
+            // Clear any previous error messages
+            this.errorMessage.set('');
+
+            // Test audio blob validity by trying to create an Audio element
+            this.testAudioBlob(audioBlob);
+
+        } catch (error) {
+            console.error('❌ Error processing recorded audio:', error);
+            this.errorMessage.set('Failed to process recorded audio. Please try recording again.');
+        }
+    }
+
+    private testAudioBlob(blob: Blob) {
+        console.log('🧪 Testing audio blob validity...');
+        const testAudio = new Audio(URL.createObjectURL(blob));
+
+        testAudio.addEventListener('loadedmetadata', () => {
+            console.log('✅ Audio blob is valid');
+            console.log('🎵 Audio duration from metadata:', testAudio.duration, 'seconds');
+            URL.revokeObjectURL(testAudio.src);
+        });
+
+        testAudio.addEventListener('error', (e) => {
+            console.error('❌ Audio blob validation failed:', e);
+            URL.revokeObjectURL(testAudio.src);
+        });
+
+        // Don't actually load the audio, just test metadata
+        testAudio.preload = 'metadata';
     }
 
 
@@ -384,34 +604,72 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
     }
 
     playRecording() {
-        if (this.audioUrl) {
+        if (!this.audioUrl) {
+            console.error('No audio URL available for playback');
+            return;
+        }
+
+        try {
             // Stop any currently playing audio
             if (this.currentAudio) {
                 this.currentAudio.pause();
                 this.currentAudio.currentTime = 0;
+                this.currentAudio = null;
             }
 
+            console.log('Creating audio element with URL:', this.audioUrl);
             this.currentAudio = new Audio(this.audioUrl);
+
+            // Set up event listeners before attempting to play
             this.currentAudio.addEventListener('ended', () => {
+                console.log('Audio playback ended');
                 this.isPlayingAudio.set(false);
                 this.currentAudio = null;
             });
 
-            this.currentAudio.addEventListener('error', () => {
-                console.error('Failed to play audio');
-                this.errorMessage.set('Failed to play audio recording.');
+            this.currentAudio.addEventListener('error', (e) => {
+                console.error('Audio playback error:', e);
+                this.errorMessage.set('Failed to play audio recording. Please try recording again.');
                 this.isPlayingAudio.set(false);
                 this.currentAudio = null;
             });
 
-            this.currentAudio.play().then(() => {
-                this.isPlayingAudio.set(true);
-            }).catch(error => {
-                console.error('Failed to play audio:', error);
-                this.errorMessage.set('Failed to play audio recording.');
-                this.isPlayingAudio.set(false);
-                this.currentAudio = null;
+            // Use canplay event for better compatibility
+            this.currentAudio.addEventListener('canplay', () => {
+                console.log('Audio can play, starting playback');
+                if (this.currentAudio) {
+                    this.currentAudio.play().then(() => {
+                        this.isPlayingAudio.set(true);
+                        console.log('Audio playback started successfully');
+                    }).catch(error => {
+                        console.error('Failed to play audio:', error);
+                        this.errorMessage.set('Failed to play audio recording. Please try recording again.');
+                        this.isPlayingAudio.set(false);
+                    });
+                }
             });
+
+            // Add a timeout fallback in case canplay doesn't fire
+            setTimeout(() => {
+                if (this.currentAudio && !this.isPlayingAudio()) {
+                    console.log('Fallback: attempting to play audio directly');
+                    this.currentAudio.play().then(() => {
+                        this.isPlayingAudio.set(true);
+                        console.log('Audio playback started via fallback');
+                    }).catch(error => {
+                        console.error('Fallback audio play failed:', error);
+                        this.errorMessage.set('Failed to play audio recording. Please try recording again.');
+                        this.isPlayingAudio.set(false);
+                    });
+                }
+            }, 1000);
+
+            // Load the audio
+            this.currentAudio.load();
+        } catch (error) {
+            console.error('Error setting up audio playback:', error);
+            this.errorMessage.set('Failed to setup audio playback. Please try recording again.');
+            this.isPlayingAudio.set(false);
         }
     }
 
@@ -531,7 +789,7 @@ export class EvaluatorComponent implements OnInit, OnDestroy {
         };
 
         return Object.entries(evaluation.criteria)
-            .filter(([_, score]) => score !== undefined && score > 0)
+            .filter(([, score]) => score !== undefined && score > 0)
             .map(([key, score]) => ({
                 key,
                 ...criteriaConfig[key as keyof typeof criteriaConfig],

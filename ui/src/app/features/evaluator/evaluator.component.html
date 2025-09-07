@@ -140,7 +140,21 @@
               @if (isRecording()) {
                 <div class="text-center">
                   <div class="text-red-600 font-semibold text-lg">{{ formatTime(recordingDuration()) }}</div>
-                  <div class="text-sm text-muted-color">Recording in progress...</div>
+                  <div class="text-sm text-muted-color mb-2">Recording in progress...</div>
+
+                  <!-- Audio Level Indicator -->
+                  <div class="w-full max-w-xs mx-auto">
+                    <div class="text-xs text-muted-color mb-1">Audio Level</div>
+                    <p-progressBar
+                      [value]="audioLevel()"
+                      [showValue]="false"
+                      [style]="{'height': '8px'}"
+                      [class]="'audio-level-' + (audioLevel() > 50 ? 'good' : audioLevel() > 20 ? 'medium' : 'low')">
+                    </p-progressBar>
+                    <div class="text-xs text-muted-color mt-1">
+                      {{ audioLevel() > 10 ? '🎤 Good' : '🔇 Speak louder' }}
+                    </div>
+                  </div>
                 </div>
               } @else if (recordedAudio()) {
                 <div class="text-center">
@@ -213,11 +227,11 @@
         }
 
         @if (recordedAudio()) {
-          <div class="pt-6">
-            <p-button 
+          <div class="pt-6 flex justify-center">
+            <p-button
               label="Evaluate with AI"
               icon="pi pi-sparkles"
-              class="w-full"
+              class="w-auto px-8"
               size="large"
               [loading]="isEvaluating()"
               [disabled]="!canEvaluate()"

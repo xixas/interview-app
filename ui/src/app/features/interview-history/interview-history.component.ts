@@ -17,6 +17,7 @@ import { MessageModule } from 'primeng/message';
 import { TooltipModule } from 'primeng/tooltip';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ToolbarModule } from 'primeng/toolbar';
+import { ToastModule } from 'primeng/toast';
 import { ConfirmationService, MessageService } from 'primeng/api';
 
 import { InterviewSessionService } from '../../core/services/interview-session.service';
@@ -33,6 +34,7 @@ interface TableColumn {
 
 @Component({
   selector: 'app-interview-history',
+  standalone: true,
   imports: [
     CommonModule,
     FormsModule,
@@ -51,6 +53,7 @@ interface TableColumn {
     TooltipModule,
     ConfirmDialogModule,
     ToolbarModule,
+    ToastModule,
     PageHeaderComponent
   ],
   providers: [ConfirmationService, MessageService],

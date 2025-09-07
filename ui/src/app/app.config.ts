@@ -1,3 +1,6 @@
+// at top of your main.ts (or app.config file)
+import { ConfirmationService, MessageService } from 'primeng/api';
+
 import {
   ApplicationConfig,
   provideBrowserGlobalErrorListeners,
@@ -84,6 +87,8 @@ export const appConfig: ApplicationConfig = {
     {
       provide: ENVIRONMENT,
       useValue: environment
-    }
+    },
+    ConfirmationService,
+    MessageService
   ],
 };

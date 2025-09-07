@@ -7,6 +7,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { QuestionsModule } from './questions/questions.module';
 import { InterviewHistoryModule } from './interview-history/interview-history.module';
+import { DatabaseInitService } from './services/database-init.service';
 import { Tech } from './entities/tech.entity';
 import { Question } from './entities/question.entity';
 import { InterviewSession } from './entities/interview-session.entity';
@@ -49,7 +50,7 @@ import { InterviewResponse } from './entities/interview-response.entity';
         entities: [InterviewSession, InterviewResponse],
         migrations: [join(__dirname, '..', 'migrations', '*.js')],
         synchronize: false,
-        migrationsRun: false, // We created tables manually
+        migrationsRun: true, // Auto-run migrations on startup
         logging: process.env.NODE_ENV === 'development',
         extra: {
           journal_mode: 'WAL',
@@ -66,7 +67,7 @@ import { InterviewResponse } from './entities/interview-response.entity';
     InterviewHistoryModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, DatabaseInitService],
 })
 export class AppModule {}
 

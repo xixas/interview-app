@@ -23,7 +23,7 @@
 .recording-pulse {
   position: relative;
   animation: pulse-recording 1.5s infinite;
-  
+
   &::before {
     content: '';
     position: absolute;
@@ -31,5 +31,20 @@
     border: 2px solid var(--red-400);
     border-radius: 50%;
     animation: pulse-ring 1.5s infinite;
+  }
+}
+
+// Audio level indicator styles
+:host ::ng-deep {
+  .audio-level-good .p-progressbar-value {
+    background: linear-gradient(90deg, #10b981, #059669) !important;
+  }
+
+  .audio-level-medium .p-progressbar-value {
+    background: linear-gradient(90deg, #f59e0b, #d97706) !important;
+  }
+
+  .audio-level-low .p-progressbar-value {
+    background: linear-gradient(90deg, #ef4444, #dc2626) !important;
   }
 }

@@ -157,11 +157,6 @@
         "from": "dist/ui/browser",
         "to": "ui", 
         "filter": ["**/*"]
-      },
-      {
-        "from": "node_modules/sqlite3",
-        "to": "node_modules/sqlite3",
-        "filter": ["**/*"]
       }
     ],
     "extraResources": [
@@ -182,6 +177,13 @@
       {
         "from": "api/src/assets/questions.db",
         "to": "assets/questions.db"
+      },
+      {
+        "from": "node_modules",
+        "to": "app/node_modules",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "linux": {

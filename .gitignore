@@ -141,3 +141,4 @@ packaged/
 .yarn-integrity
 .npm/
 .verdaccio/
+session_context.md

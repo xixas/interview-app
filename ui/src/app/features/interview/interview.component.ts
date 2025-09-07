@@ -218,6 +218,7 @@ export class InterviewComponent implements OnInit, OnDestroy {
   recordingTime = signal(0);
   recordingDuration = signal(0);
   isPlaying = signal(false);
+  audioLevel = signal(0); // Audio level indicator (0-100)
   showEndDialog = signal(false);
   
   // Dialog configuration
@@ -346,14 +347,18 @@ export class InterviewComponent implements OnInit, OnDestroy {
 
   // Private fields
   private timerInterval: any;
-  private recordingTimer: any;
-  private recordingTimeTimer: any;
+  private recordingTimer: number | null = null;
+  private recordingTimeTimer: number | null = null;
   // MediaRecorder API fields
   private mediaRecorder: MediaRecorder | null = null;
   private audioChunks: Blob[] = [];
   private audioBlob: Blob | null = null;
   private audioUrl: string | null = null;
   private audioElement: HTMLAudioElement | null = null;
+  private audioContext: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
+  private microphone: MediaStreamAudioSourceNode | null = null;
+  private levelCheckInterval: number | null = null;
   
   // Network event handlers
   private networkOnlineHandler: (() => void) | null = null;
@@ -538,17 +543,20 @@ export class InterviewComponent implements OnInit, OnDestroy {
     if (this.recordingTimeTimer) {
       clearInterval(this.recordingTimeTimer);
     }
-    
+
+    // Clean up audio context and level monitoring
+    this.cleanupAudioContext();
+
     // Clean up MediaRecorder resources
     if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
       this.mediaRecorder.stop();
     }
-    
+
     // Clean up audio URL
     if (this.audioUrl) {
       URL.revokeObjectURL(this.audioUrl);
     }
-    
+
     // Clean up audio element
     if (this.audioElement) {
       this.audioElement.pause();
@@ -897,58 +905,118 @@ export class InterviewComponent implements OnInit, OnDestroy {
       this.errorMessage.set('Audio recording is not available in this environment.');
       return;
     }
-    
+
     try {
       // Clear any previous errors
       this.errorMessage.set('');
-      
-      // Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      console.log('🎤 Starting audio recording (Interview mode)...');
+
+      // Check microphone permission first
+      if (navigator.permissions) {
+        const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        console.log('🔒 Microphone permission state:', permission.state);
+        if (permission.state === 'denied') {
+          this.errorMessage.set('Microphone access denied. Please enable microphone permissions in your browser settings.');
+          return;
+        }
+      }
+
+      // Request microphone access with enhanced settings
+      console.log('🎤 Requesting microphone access...');
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        } 
+          echoCancellation: false,  // Disable to get raw audio
+          noiseSuppression: false,  // Disable to capture all audio
+          autoGainControl: true,    // Keep this for volume adjustment
+          sampleRate: 44100,        // High quality sample rate
+          channelCount: 1,          // Mono recording
+        }
       });
-      
+
+      console.log('✅ Microphone access granted');
+      console.log('🎵 Audio stream settings:', stream.getAudioTracks()[0].getSettings());
+
+      // Set up audio level monitoring
+      this.setupAudioLevelMonitoring(stream);
+
       // Reset previous recording data
       this.audioChunks = [];
       this.audioBlob = null;
       this.audioUrl = null;
-      
-      // Create MediaRecorder
-      this.mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
-      
+      this.audioLevel.set(0);
+
+      // Create MediaRecorder with better error handling
+      let mimeType = 'audio/webm;codecs=opus';
+      try {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          this.mediaRecorder = new MediaRecorder(stream, {
+            mimeType: 'audio/webm;codecs=opus',
+            audioBitsPerSecond: 128000  // Higher bitrate for better quality
+          });
+          console.log('🎵 Using WebM with Opus codec');
+        } else {
+          throw new Error('Opus not supported');
+        }
+      } catch (error) {
+        console.warn('⚠️ Opus codec not supported, trying fallback formats...', error);
+        // Try other formats
+        if (MediaRecorder.isTypeSupported('audio/webm')) {
+          this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+          mimeType = 'audio/webm';
+          console.log('🎵 Using WebM without codec specification');
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/mp4' });
+          mimeType = 'audio/mp4';
+          console.log('🎵 Using MP4 format');
+        } else {
+          this.mediaRecorder = new MediaRecorder(stream);
+          mimeType = 'audio/webm'; // Default assumption
+          console.log('🎵 Using default MediaRecorder format');
+        }
+      }
+
+      console.log('🎵 MediaRecorder created with MIME type:', mimeType);
+
       // Handle data available event
       this.mediaRecorder.ondataavailable = (event) => {
+        console.log('📊 Audio data chunk received:', event.data.size, 'bytes');
         if (event.data.size > 0) {
           this.audioChunks.push(event.data);
         }
       };
-      
+
       // Handle recording stop event
       this.mediaRecorder.onstop = () => {
+        console.log('⏹️ Recording stopped, processing audio...');
         this.processRecordedAudio();
         // Stop all tracks to release microphone
         stream.getTracks().forEach(track => track.stop());
       };
-      
-      // Start recording
-      this.mediaRecorder.start();
+
+      // Handle errors
+      this.mediaRecorder.onerror = (event) => {
+        console.error('❌ MediaRecorder error:', event);
+        this.errorMessage.set('Recording error occurred. Please try again.');
+        this.isRecording.set(false);
+      };
+
+      // Start recording with frequent data collection
+      this.mediaRecorder.start(1000); // Collect data every second
       this.isRecording.set(true);
       this.hasRecording.set(false);
       this.recordingTime.set(0);
-      
+
+      console.log('🔴 Recording started at:', new Date().toISOString());
+
       // Start recording timer
       this.recordingTimeTimer = setInterval(() => {
         this.recordingTime.update(time => time + 1);
       }, 1000);
-      
+
       // Auto-stop after 5 minutes
       this.recordingTimer = setTimeout(() => {
         if (this.isRecording()) {
+          console.log('⏰ Auto-stopping recording after 5 minutes');
           this.stopRecording();
         }
       }, 300000);
@@ -976,44 +1044,166 @@ export class InterviewComponent implements OnInit, OnDestroy {
       clearTimeout(this.recordingTimer);
       this.recordingTimer = null;
     }
-    
+
     if (this.recordingTimeTimer) {
       clearInterval(this.recordingTimeTimer);
       this.recordingTimeTimer = null;
     }
 
+    if (this.levelCheckInterval) {
+      clearInterval(this.levelCheckInterval);
+      this.levelCheckInterval = null;
+    }
+
     this.isRecording.set(false);
-    
+    this.audioLevel.set(0);
+
+    // Clean up audio context
+    this.cleanupAudioContext();
+
     // Stop MediaRecorder if active
     if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
       this.mediaRecorder.stop();
     }
   }
 
+  private setupAudioLevelMonitoring(stream: MediaStream) {
+    try {
+      console.log('🎵 Setting up audio level monitoring...');
+
+      // Create audio context
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      this.audioContext = new AudioContextClass();
+      this.analyser = this.audioContext.createAnalyser();
+      this.microphone = this.audioContext.createMediaStreamSource(stream);
+
+      // Configure analyser
+      this.analyser.fftSize = 256;
+      this.analyser.smoothingTimeConstant = 0.8;
+
+      // Connect microphone to analyser
+      this.microphone.connect(this.analyser);
+
+      // Start monitoring audio levels
+      this.startAudioLevelCheck();
+
+      console.log('✅ Audio level monitoring setup complete');
+    } catch (error) {
+      console.warn('⚠️ Could not setup audio level monitoring:', error);
+      // Continue without level monitoring
+    }
+  }
+
+  private startAudioLevelCheck() {
+    if (!this.analyser) return;
+
+    const bufferLength = this.analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    this.levelCheckInterval = setInterval(() => {
+      if (!this.analyser || !this.isRecording()) return;
+
+      this.analyser.getByteFrequencyData(dataArray);
+
+      // Calculate average volume
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i];
+      }
+      const average = sum / bufferLength;
+
+      // Convert to percentage (0-100)
+      const level = Math.round((average / 255) * 100);
+      this.audioLevel.set(level);
+
+    }, 100); // Update every 100ms
+  }
+
+  private cleanupAudioContext() {
+    if (this.microphone) {
+      this.microphone.disconnect();
+      this.microphone = null;
+    }
+
+    if (this.analyser) {
+      this.analyser.disconnect();
+      this.analyser = null;
+    }
+
+    if (this.audioContext && this.audioContext.state !== 'closed') {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
+  }
+
   private processRecordedAudio() {
+    console.log('🔄 Processing recorded audio (Interview mode)...');
+    console.log('📊 Audio chunks count:', this.audioChunks.length);
+
     if (this.audioChunks.length === 0) {
-      console.warn('No audio chunks to process');
+      console.error('❌ No audio chunks recorded');
+      this.errorMessage.set('No audio data recorded. Please check your microphone and try again.');
       return;
     }
-    
-    // Create blob from audio chunks
-    this.audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-    this.audioUrl = URL.createObjectURL(this.audioBlob);
-    
-    // Set recording duration
-    this.recordingDuration.set(this.recordingTime());
-    
-    // Mark as having recording
-    this.hasRecording.set(true);
-    
-    // Create audio element for playback
-    this.audioElement = new Audio(this.audioUrl);
-    this.audioElement.addEventListener('ended', () => {
-      this.isPlaying.set(false);
-    });
-    
-    // No transcription needed - audio will be evaluated in backend
-    console.log('Audio recorded successfully, ready for submission');
+
+    try {
+      // Log chunk sizes for debugging
+      const chunkSizes = this.audioChunks.map(chunk => chunk.size);
+      const totalSize = chunkSizes.reduce((sum, size) => sum + size, 0);
+      console.log('📊 Audio chunk sizes:', chunkSizes);
+      console.log('📊 Total audio data size:', totalSize, 'bytes');
+
+      if (totalSize < 1000) {
+        console.warn('⚠️ Audio data seems very small, might indicate recording issues');
+      }
+
+      // Create audio blob with proper MIME type detection
+      let mimeType = 'audio/webm';
+
+      // Check the first chunk to determine the actual format
+      if (this.audioChunks.length > 0 && this.audioChunks[0].type) {
+        mimeType = this.audioChunks[0].type;
+        console.log('🎵 Detected MIME type from chunk:', mimeType);
+      }
+
+      // Create blob from audio chunks
+      this.audioBlob = new Blob(this.audioChunks, { type: mimeType });
+      this.audioUrl = URL.createObjectURL(this.audioBlob);
+
+      console.log('🔗 Audio URL created:', this.audioUrl);
+      console.log('📊 Final audio blob size:', this.audioBlob.size, 'bytes');
+      console.log('🎵 Final audio blob type:', this.audioBlob.type);
+
+      // Set recording duration
+      this.recordingDuration.set(this.recordingTime());
+
+      // Mark as having recording
+      this.hasRecording.set(true);
+
+      // Create audio element for playback with enhanced error handling
+      this.audioElement = new Audio(this.audioUrl);
+
+      this.audioElement.addEventListener('ended', () => {
+        this.isPlaying.set(false);
+      });
+
+      this.audioElement.addEventListener('error', (e) => {
+        console.error('❌ Audio element error:', e);
+        this.errorMessage.set('Audio playback setup failed. Recording may be corrupted.');
+      });
+
+      this.audioElement.addEventListener('loadedmetadata', () => {
+        console.log('✅ Audio metadata loaded successfully');
+        console.log('🎵 Audio duration from metadata:', this.audioElement?.duration, 'seconds');
+      });
+
+      console.log('⏱️ Recording duration:', this.recordingTime(), 'seconds');
+      console.log('✅ Audio processing complete - ready for submission');
+
+    } catch (error) {
+      console.error('❌ Error processing recorded audio:', error);
+      this.errorMessage.set('Failed to process recorded audio. Please try recording again.');
+    }
   }
 
 
@@ -1027,6 +1217,7 @@ export class InterviewComponent implements OnInit, OnDestroy {
     this.recordingTime.set(0);
     this.recordingDuration.set(0);
     this.isPlaying.set(false);
+    this.audioLevel.set(0);
     
     // Clean up MediaRecorder
     if (this.mediaRecorder) {
@@ -1035,6 +1226,9 @@ export class InterviewComponent implements OnInit, OnDestroy {
       }
       this.mediaRecorder = null;
     }
+
+    // Clean up audio context and level monitoring
+    this.cleanupAudioContext();
     
     // Clean up audio resources
     if (this.audioUrl) {
@@ -1057,22 +1251,26 @@ export class InterviewComponent implements OnInit, OnDestroy {
 
   togglePlayback() {
     if (!this.audioElement) {
-      console.warn('No audio element available');
+      console.warn('❌ No audio element available for playback');
       return;
     }
-    
+
     if (this.isPlaying()) {
+      console.log('⏸️ Pausing audio playback');
       this.audioElement.pause();
       this.audioElement.currentTime = 0;
       this.isPlaying.set(false);
     } else {
-      // Add error handling for playback
-      this.audioElement.play().catch(error => {
-        console.error('Audio playback failed:', error);
+      console.log('▶️ Starting audio playback');
+      // Add enhanced error handling for playback
+      this.audioElement.play().then(() => {
+        this.isPlaying.set(true);
+        console.log('✅ Audio playback started successfully');
+      }).catch(error => {
+        console.error('❌ Audio playback failed:', error);
         this.isPlaying.set(false);
-        this.errorMessage.set('Failed to play audio recording.');
+        this.errorMessage.set('Failed to play audio recording. Please try recording again.');
       });
-      this.isPlaying.set(true);
     }
   }
 
