@@ -9,34 +9,55 @@
   },
   "homepage": "https://github.com/osmosys/interview-app",
   "scripts": {
-    "postinstall": "electron-builder install-app-deps",
-    "nxe:build:frontend": "nx build ui",
-    "nxe:build:backend": "nx build electron",
-    "nxe:serve:frontend": "nx serve ui",
-    "nxe:serve:backend": "nx serve electron",
-    "nxe:package:app": "nx run electron:make --prepackageOnly",
-    "nxe:make:app": "nx run electron:make",
-    "serve:api": "nx serve api",
-    "serve:evaluator": "nx serve evaluator",
-    "build:api": "nx build api",
-    "build:evaluator": "nx build evaluator",
-    "migration:run:history": "cd api && npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d src/user-history-data-source.ts",
-    "migration:revert:history": "cd api && npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:revert -d src/user-history-data-source.ts",
-    "build": "nx run-many -t build --projects=ui,api,evaluator,electron",
-    "build:electron": "nx build ui --configuration=electron && nx build api && nx build evaluator && nx build electron",
-    "build:appimage": "npm run build:electron && npm run package:appimage",
-    "package:appimage": "electron-builder --linux AppImage",
-    "package:all-platforms": "electron-builder --linux --win --mac",
-    "package:win": "electron-builder --win",
-    "package:mac": "electron-builder --mac",
-    "docker:build:all": "docker run --rm --env ELECTRON_CACHE=/root/.cache/electron --env ELECTRON_BUILDER_CACHE=/root/.cache/electron-builder -v $(pwd):/project -v $(pwd)-node-modules:/project/node_modules -v ~/.cache/electron:/root/.cache/electron -v ~/.cache/electron-builder:/root/.cache/electron-builder electronuserland/builder:wine /bin/bash -c \"cd /project && npm install && npm run package:all-platforms\"",
-    "docker:build:win": "docker run --rm --env ELECTRON_CACHE=/root/.cache/electron --env ELECTRON_BUILDER_CACHE=/root/.cache/electron-builder -v $(pwd):/project -v $(pwd)-node-modules:/project/node_modules -v ~/.cache/electron:/root/.cache/electron -v ~/.cache/electron-builder:/root/.cache/electron-builder electronuserland/builder:wine /bin/bash -c \"cd /project && npm install && npm run package:win\"",
-    "docker:build:mac": "docker run --rm --env ELECTRON_CACHE=/root/.cache/electron --env ELECTRON_BUILDER_CACHE=/root/.cache/electron-builder -v $(pwd):/project -v $(pwd)-node-modules:/project/node_modules -v ~/.cache/electron:/root/.cache/electron -v ~/.cache/electron-builder:/root/.cache/electron-builder electronuserland/builder:wine /bin/bash -c \"cd /project && npm install && npm run package:mac\"",
-    "test": "nx run-many -t test --all",
-    "lint": "nx run-many -t lint --all",
-    "dev": "concurrently \"npm run serve:api\" \"npm run serve:evaluator\" \"npm run nxe:serve:frontend\"",
-    "dev:electron": "concurrently \"npm run serve:api\" \"npm run serve:evaluator\" \"npm run nxe:serve:frontend\" \"wait-on http://localhost:3002 && npm run nxe:serve:backend\""
-  },
+  "postinstall": "electron-builder install-app-deps",
+  "nxe:build:frontend": "nx build ui",
+  "nxe:build:backend": "nx build electron",
+  "nxe:serve:frontend": "nx serve ui",
+  "nxe:serve:backend": "nx serve electron",
+  "nxe:package:app": "nx run electron:make --prepackageOnly",
+  "nxe:make:app": "nx run electron:make",
+  "serve:api": "nx serve api",
+  "serve:evaluator": "nx serve evaluator",
+  "build:api": "nx build api",
+  "build:evaluator": "nx build evaluator",
+  "migration:run:history": "cd api && npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d src/user-history-data-source.ts",
+  "migration:revert:history": "cd api && npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:revert -d src/user-history-data-source.ts",
+  "build": "nx run-many -t build --projects=ui,api,evaluator,electron",
+  "build:electron": "nx build ui --configuration=electron && nx build api && nx build evaluator && nx build electron",
+  "build:appimage": "npm run build:electron && npm run package:appimage-rebuild",
+  "build:win": "npm run build:electron && npm run package:win-rebuild",
+  "package:appimage": "electron-builder --linux AppImage",
+  "package:all-platforms": "electron-builder --linux --win --mac",
+  "package:win": "electron-builder --win",
+  "package:mac": "electron-builder --mac",
+  "docker:build:all": "docker run --rm --env ELECTRON_CACHE=/root/.cache/electron --env ELECTRON_BUILDER_CACHE=/root/.cache/electron-builder -v $(pwd):/project -v $(pwd)-node-modules:/project/node_modules -v ~/.cache/electron:/root/.cache/electron -v ~/.cache/electron-builder:/root/.cache/electron-builder electronuserland/builder:wine /bin/bash -c \"cd /project && npm install && npm run package:all-platforms\"",
+  "docker:build:win": "docker run --rm --env ELECTRON_CACHE=/root/.cache/electron --env ELECTRON_BUILDER_CACHE=/root/.cache/electron-builder -v $(pwd):/project -v $(pwd)-node-modules:/project/node_modules -v ~/.cache/electron:/root/.cache/electron -v ~/.cache/electron-builder:/root/.cache/electron-builder electronuserland/builder:wine /bin/bash -c \"cd /project && npm install && npm run package:win\"",
+  "docker:build:mac": "docker run --rm --env ELECTRON_CACHE=/root/.cache/electron --env ELECTRON_BUILDER_CACHE=/root/.cache/electron-builder -v $(pwd):/project -v $(pwd)-node-modules:/project/node_modules -v ~/.cache/electron:/root/.cache/electron -v ~/.cache/electron-builder:/root/.cache/electron-builder electronuserland/builder:wine /bin/bash -c \"cd /project && npm install && npm run package:mac\"",
+  "test": "nx run-many -t test --all",
+  "lint": "nx run-many -t lint --all",
+  "dev": "concurrently \"npm run serve:api\" \"npm run serve:evaluator\" \"npm run nxe:serve:frontend\"",
+  "dev:electron": "concurrently \"npm run serve:api\" \"npm run serve:evaluator\" \"npm run nxe:serve:frontend\" \"wait-on http://localhost:3002 && npm run nxe:serve:backend\"",
+
+  // ---------- native rebuild + packaging helpers ----------
+  // Rebuild sqlite3 only for the Electron runtime (fast)
+  "prebuild:rebuild-native": "npx electron-rebuild -f -v 34.5.6 -w sqlite3",
+
+  // Rebuild ALL native modules for Electron (slower, but safer)
+  "prebuild:rebuild-native:all": "npx electron-rebuild -f -v 34.5.6",
+
+  // Linux AppImage (rebuild then package)
+  "package:appimage-rebuild": "npm run prebuild:rebuild-native && electron-builder --linux AppImage",
+
+  // Windows installer (rebuild then package). Use on Windows or in Wine Docker.
+  "package:win-rebuild": "npm run prebuild:rebuild-native && electron-builder --win nsis",
+
+  // macOS dmg (rebuild then package). Must run on macOS (or on macOS runner).
+  "package:mac-rebuild": "npm run prebuild:rebuild-native && electron-builder --mac",
+
+  // Build all targets after rebuilding (use with proper platform/CI)
+  "package:all-rebuild": "npm run prebuild:rebuild-native:all && electron-builder --linux --win --mac"
+}
+,
   "private": true,
   "devDependencies": {
     "@angular-devkit/core": "~20.1.0",
@@ -144,19 +165,23 @@
     "nodeGypRebuild": false,
     "asar": true,
     "asarUnpack": [
-      "**/node_modules/sqlite3/**/*"
+      "**/*.node"
     ],
-    "includeSubNodeModules": true,
+    "includeSubNodeModules": false,
     "files": [
       {
         "from": "dist/electron",
         "to": ".",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "dist/ui/browser",
-        "to": "ui", 
-        "filter": ["**/*"]
+        "to": "ui",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "extraResources": [

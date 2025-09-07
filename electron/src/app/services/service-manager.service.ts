@@ -154,13 +154,24 @@ export class ServiceManager {
           ...this.configManager.getEnvironmentVariables(),
           ...this.databaseManager.getDatabasePaths(),
           API_PORT: apiPort.toString(),
-          PORT: apiPort.toString()
+          PORT: apiPort.toString(),
+          ELECTRON_RUN_AS_NODE: '1'
         };
 
-        const apiProcess = spawn(this.getNodeExecutable(), [this.getApiServicePath()], {
+        const nodeExecutable = this.getNodeExecutable();
+        const apiServicePath = this.getApiServicePath();
+        const workingDir = this.getApiWorkingDirectory();
+
+        console.log(`🔧 API Service spawn details:
+          Node: ${nodeExecutable}
+          Script: ${apiServicePath}
+          CWD: ${workingDir}
+          Port: ${apiPort}`);
+
+        const apiProcess = spawn(nodeExecutable, [apiServicePath], {
           env,
           stdio: ['pipe', 'pipe', 'pipe'],
-          cwd: this.getApiWorkingDirectory()
+          cwd: workingDir
         });
 
         this.services.set('api', apiProcess);
@@ -244,13 +255,24 @@ export class ServiceManager {
           ...process.env,
           ...this.configManager.getEnvironmentVariables(),
           EVALUATOR_PORT: evaluatorPort.toString(),
-          PORT: evaluatorPort.toString()
+          PORT: evaluatorPort.toString(),
+          ELECTRON_RUN_AS_NODE: '1'
         };
 
-        const evaluatorProcess = spawn(this.getNodeExecutable(), [this.getEvaluatorServicePath()], {
+        const nodeExecutable = this.getNodeExecutable();
+        const evaluatorServicePath = this.getEvaluatorServicePath();
+        const workingDir = this.getEvaluatorWorkingDirectory();
+
+        console.log(`🔧 Evaluator Service spawn details:
+          Node: ${nodeExecutable}
+          Script: ${evaluatorServicePath}
+          CWD: ${workingDir}
+          Port: ${evaluatorPort}`);
+
+        const evaluatorProcess = spawn(nodeExecutable, [evaluatorServicePath], {
           env,
           stdio: ['pipe', 'pipe', 'pipe'],
-          cwd: this.getEvaluatorWorkingDirectory()
+          cwd: workingDir
         });
 
         this.services.set('evaluator', evaluatorProcess);
@@ -452,19 +474,20 @@ export class ServiceManager {
 
   /**
    * Get Node.js executable path for spawning services
-   * CRITICAL: Always use system Node.js, never Electron executable
+   * Use Electron's own executable with ELECTRON_RUN_AS_NODE=1 for maximum compatibility
    */
   private getNodeExecutable(): string {
-    const isDevelopment = 'ELECTRON_IS_DEV' in process.env ? 
-      parseInt(process.env.ELECTRON_IS_DEV, 10) === 1 : 
+    const isDevelopment = 'ELECTRON_IS_DEV' in process.env ?
+      parseInt(process.env.ELECTRON_IS_DEV, 10) === 1 :
       !app.isPackaged;
-    
+
     if (!isDevelopment) {
-      // In production/AppImage, always use system Node.js
-      // NEVER use process.execPath as it returns Electron executable in AppImage
-      console.log('🔧 Using system Node.js for service spawning (preventing recursive Electron startup)');
-      return 'node';
+      // In production/AppImage, use Electron's own executable
+      // This ensures 100% compatibility with bundled native modules
+      console.log('🔧 Using Electron executable as Node.js runtime:', process.execPath);
+      return process.execPath;
     } else {
+      // In development, use system Node.js
       return 'node';
     }
   }

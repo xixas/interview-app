@@ -41,7 +41,9 @@ export class DatabaseService {
       }
       // Test API server connectivity
       try {
+        console.log('[DB-INIT] Testing API server connectivity...', `${this.apiUrl}/health`);
         const response = await fetch(`${this.apiUrl}/health`);
+        console.log('[DB-INIT] API server health check response:', response);
         if (!response.ok) {
           throw new Error(`API server responded with status ${response.status}`);
         }

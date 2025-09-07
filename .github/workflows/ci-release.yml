@@ -1,0 +1,182 @@
+name: Build & Package — Interview App
+
+on:
+  push:
+    tags:
+      - 'v*'            # release tags like v1.2.3
+  workflow_dispatch:   # allow manual runs from Actions UI
+
+env:
+  NODE_VERSION: '20'           # Node major version used in runners (adjust if needed)
+  ELECTRON_VERSION: '34.5.6'   # adjust to exact electron version you ship
+  APP_DIR: '.'                 # repo root
+  RELEASE_DIR: 'release'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    name: Prepare caches (fast fail-safe)
+    runs-on: ubuntu-latest
+    outputs:
+      cache-key-node: ${{ steps.cache-node.outputs.cache-hit }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Show versions
+        run: |
+          node -v
+          npm -v
+          npx electron --version || echo "electron not installed globally"
+
+  build-linux:
+    name: Build Linux AppImage
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache electron & electron-builder
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            node_modules
+          key: linux-electron-cache-${{ hashFiles('package-lock.json', 'package.json') }}
+          restore-keys: |
+            linux-electron-cache-
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all projects (ui, api, evaluator, electron)
+        run: npm run build:electron
+
+      - name: Rebuild native modules for electron (sqlite3)
+        run: npx electron-rebuild -f -v ${{ env.ELECTRON_VERSION }} -w sqlite3
+
+      - name: Create AppImage
+        run: |
+          npm run package:appimage-rebuild
+        env:
+          CI: true
+
+      - name: List release dir
+        run: ls -la ${RELEASE_DIR} || echo "release dir missing"
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: interview-app-linux
+          path: |
+            ${RELEASE_DIR}/*.AppImage
+            ${RELEASE_DIR}/*.zip
+            ${RELEASE_DIR}/*.deb
+          retention-days: 7
+
+  build-windows:
+    name: Build Windows NSIS (via Docker + Wine on Ubuntu)
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build projects
+        run: npm run build:electron
+
+      - name: Prebuild native modules (sqlite3)
+        run: npx electron-rebuild -f -v ${{ env.ELECTRON_VERSION }} -w sqlite3
+
+      - name: Build Windows installer inside electronuserland/builder:wine Docker image
+        run: |
+          docker run --rm \
+            -e ELECTRON_CACHE=/root/.cache/electron \
+            -e ELECTRON_BUILDER_CACHE=/root/.cache/electron-builder \
+            -v "${{ github.workspace }}":/project \
+            -v "${{ github.workspace }}-node-modules":/project/node_modules \
+            -v ~/.cache/electron:/root/.cache/electron \
+            -v ~/.cache/electron-builder:/root/.cache/electron-builder \
+            electronuserland/builder:wine \
+            /bin/bash -c "cd /project && npm ci && npm run package:win-rebuild"
+        # Note: if your repo is large, consider using a persistent cache for node_modules and electron caches
+
+      - name: Fetch produced windows artifacts
+        run: ls -la ${RELEASE_DIR} || echo "release dir missing"
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: interview-app-windows
+          path: |
+            ${RELEASE_DIR}/*.exe
+            ${RELEASE_DIR}/*.nsis
+            ${RELEASE_DIR}/*.zip
+          retention-days: 7
+
+  build-mac:
+    name: Build macOS DMG (macOS runner)
+    runs-on: macos-latest
+    needs: prepare
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build projects
+        run: npm run build:electron
+
+      - name: Rebuild native modules for electron on macOS
+        run: npx electron-rebuild -f -v ${{ env.ELECTRON_VERSION }} -w sqlite3
+
+      - name: Package macOS DMG
+        run: |
+          npm run package:mac-rebuild
+        env:
+          CI: true
+
+      - name: List release dir
+        run: ls -la ${RELEASE_DIR} || echo "release dir missing"
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: interview-app-macos
+          path: |
+            ${RELEASE_DIR}/*.dmg
+            ${RELEASE_DIR}/*.zip
+          retention-days: 7
